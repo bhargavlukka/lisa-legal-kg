@@ -1,0 +1,13 @@
+domain: immigration
+fields:
+  id: id
+  title: title
+  citation: citation
+  decision_date: decision_date
+  decision_year: decision_year
+  court: issuing_body
+  source_url: source_url
+  sha256: sha256
+  page_count: page_count
+extra: [volume, jurisdiction, document_type, precedent_status_at_publication, current_legal_status, index_label]
+statute_patterns: [usc, cfr, ina_symbol, ina_section]

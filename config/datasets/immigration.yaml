@@ -1,0 +1,4 @@
+name: immigration
+sources:
+  - {path: pack_immigration/records.jsonl, domain: immigration}
+cross_domain: []

@@ -1,0 +1,14 @@
+domain: litigation
+fields:
+  id: id
+  title: title
+  citation: citation
+  decision_date: decision_date
+  decision_year: decision_year
+  court: court
+  source_url: source_url
+  sha256: sha256
+  page_count: page_count
+extra: [docket_number, term, jurisdiction, document_type, current_legal_status, publisher_description,
+        reporter_page_start, reporter_page_end, source_pdf_page_start, source_pdf_page_end]
+statute_patterns: [usc, cfr, ina_symbol]
