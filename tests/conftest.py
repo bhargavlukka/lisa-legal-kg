@@ -4,6 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from lisa.common.config import load_dataset
+from lisa.graph.extract_det import build_graph
+from lisa.graph.loader import load_records
+
 IMM = [
     {"id": "eoir_1", "title": "ALPHA", "citation": "22 I&N Dec. 100", "issuing_body": "BIA",
      "decision_date": "1998-01-01",
@@ -51,3 +55,27 @@ def mini_data(tmp_path) -> Path:
     (d / "manifest.json").write_text(json.dumps({"files": files}), encoding="utf-8")
     (d / "selection_report.json").write_text(json.dumps(REPORT), encoding="utf-8")
     return d
+
+
+def build_json(data_dir: Path, name: str) -> dict:
+    ds = load_dataset(name)
+    recs, _ = load_records(data_dir, ds)
+    return build_graph(recs, ds).to_json()
+
+
+@pytest.fixture
+def graph_all(mini_data) -> dict:
+    return build_json(mini_data, "all")
+
+
+@pytest.fixture
+def graph_imm(mini_data) -> dict:
+    return build_json(mini_data, "immigration")
+
+
+def edges_of(graph: dict, etype: str) -> dict:
+    return {(e["source"], e["target"]): e for e in graph["edges"] if e["type"] == etype}
+
+
+def nodes_of(graph: dict, label: str) -> dict:
+    return {n["id"]: n for n in graph["nodes"] if n["label"] == label}
