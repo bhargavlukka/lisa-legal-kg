@@ -43,3 +43,11 @@ def test_load_is_idempotent(graph_all):
             r = s.run("MATCH (a)-[r]->() WHERE a.id STARTS WITH $p RETURN count(r) AS c", p=PREFIX).single()["c"]
             s.run("MATCH (n) WHERE n.id STARTS WITH $p DETACH DELETE n", p=PREFIX).consume()
     assert n == len(g["nodes"]) and r == len(g["edges"])
+
+
+def test_malformed_uri_is_reported_as_unavailable(tmp_path, graph_all):
+    from lisa.common.config import Settings
+    s = Settings(data_dir=tmp_path, out_dir=tmp_path, neo4j_uri="localhost:7687", neo4j_user="neo4j",
+                 neo4j_password="x" * 8)
+    with pytest.raises(Neo4jUnavailable):
+        load(graph_all, s)

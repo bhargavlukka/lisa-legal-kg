@@ -11,8 +11,8 @@ INA_TO_USC = {
 }
 
 _PATTERNS = {
-    "usc": re.compile(r"(?<!\d)(\d+)\s*U\.\s*S\.\s*C\.\s*(?:A\.\s*)?§*\s*(\d+[a-z]?)"),
-    "cfr": re.compile(r"(?<!\d)(\d+)\s*C\.\s*F\.\s*R\.\s*(?:§+\s*)?(\d+)(?:\.\d+)?"),
+    "usc": re.compile(r"(?<![\d#])(\d+)\s*U\.\s*S\.\s*C\.\s*(?:A\.\s*)?§*\s*(\d+[a-z]?)"),
+    "cfr": re.compile(r"(?<![\d#])(\d+)\s*C\.\s*F\.\s*R\.\s*(?:§+\s*)?(\d+)(?:\.\d+)?"),
     "ina_symbol": re.compile(r"\bINA\s*§+\s*(\d+[A-Z]?)"),
     "ina_section": re.compile(
         r"\bsection\s+(\d+[A-Z]?)(?:\([0-9a-zA-Z]+\))*\s+of\s+the\s+(?:Immigration\s+and\s+Nationality\s+)?Act\b",

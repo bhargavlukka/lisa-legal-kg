@@ -44,3 +44,8 @@ def test_section_of_the_act_not_used_for_litigation():
 def test_unknown_pattern_raises():
     with pytest.raises(ValueError, match="nope"):
         extract_mentions(PAGES, ["nope"])
+
+
+def test_page_header_number_is_not_a_usc_title():
+    pages = [{"page": 3, "text": "Interim Decision #3390\nU.S.C. § 16 and 18 U.S.C. § 924(c)"}]
+    assert ids(extract_mentions(pages, ["usc"])) == ["usc:18_924"]

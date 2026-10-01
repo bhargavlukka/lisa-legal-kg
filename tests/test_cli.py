@@ -26,3 +26,16 @@ def test_cli_checksum_error_is_clean_error(mini_data, tmp_path, monkeypatch, cap
     p.write_text(p.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     assert main(["--dataset", "all", "--no-load"]) == 2
     assert "checksum error" in capsys.readouterr().err
+
+
+def test_cli_data_dir_without_manifest_is_clean_error(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LISA_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LISA_OUT_DIR", str(tmp_path / "out"))
+    assert main(["--dataset", "all", "--no-load"]) == 2
+    assert "manifest.json" in capsys.readouterr().err
+
+
+def test_cli_unknown_dataset_is_clean_error(mini_data, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LISA_DATA_DIR", str(mini_data))
+    assert main(["--dataset", "bogus", "--no-load"]) == 2
+    assert "bogus" in capsys.readouterr().err

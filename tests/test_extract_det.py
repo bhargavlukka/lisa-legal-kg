@@ -84,3 +84,14 @@ def test_case_without_citation_gets_placeholder_canon_and_no_self_match():
     case = nodes_of(g, "Case")["scotus_2025_x"]
     assert case["props"]["canon_cite"] == "nocite:scotus_2025_x"
     assert ("scotus_2025_x", "auth:us:585_198") in edges_of(g, "CITES")
+
+
+def test_node_evidence_names_its_case(graph_all):
+    stat = nodes_of(graph_all, "Statute")["usc:8_1182"]
+    assert stat["evidence"][0]["case_id"] == "eoir_1"
+    assert stat["evidence"][0]["quote"] in IMM[0]["pages"][0]["text"]
+
+
+def test_statute_nodes_have_title_and_section(graph_all):
+    props = nodes_of(graph_all, "Statute")["usc:8_1182"]["props"]
+    assert (props["title_no"], props["section"]) == ("8", "1182")

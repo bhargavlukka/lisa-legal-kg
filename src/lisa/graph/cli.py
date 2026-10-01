@@ -24,11 +24,18 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
-    ds = load_dataset(a.dataset)
+    try:
+        ds = load_dataset(a.dataset)
+    except (FileNotFoundError, KeyError) as e:
+        print(f"config error: cannot load dataset {a.dataset!r}: {e}", file=sys.stderr)
+        return 2
     try:
         verify_manifest(settings.data_dir, [s.path for s in ds.sources])
     except ChecksumError as e:
         print(f"checksum error: {e}", file=sys.stderr)
+        return 2
+    except FileNotFoundError as e:
+        print(f"data error: {e}", file=sys.stderr)
         return 2
 
     records, quarantine = load_records(settings.data_dir, ds)

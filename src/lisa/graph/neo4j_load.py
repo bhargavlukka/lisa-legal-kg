@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 
 from neo4j import GraphDatabase
-from neo4j.exceptions import AuthError, ServiceUnavailable
+from neo4j.exceptions import DriverError, Neo4jError
 
 from lisa.common.config import Settings
 
@@ -25,6 +25,10 @@ def node_props(item: dict) -> dict:
     return p
 
 
+def _first_line(e: Exception) -> str:
+    return (str(e).strip().splitlines() or [type(e).__name__])[0]
+
+
 def _chunks(rows: list) -> list[list]:
     return [rows[i:i + BATCH] for i in range(0, len(rows), BATCH)]
 
@@ -32,12 +36,15 @@ def _chunks(rows: list) -> list[list]:
 def load(graph: dict, settings: Settings) -> dict:
     if not settings.neo4j_password:
         raise Neo4jUnavailable("NEO4J_PASSWORD is not set")
-    driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
+    try:
+        driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
+    except (DriverError, Neo4jError, ValueError) as e:
+        raise Neo4jUnavailable(_first_line(e)) from e
     try:
         driver.verify_connectivity()
-    except (ServiceUnavailable, AuthError, OSError) as e:
+    except (DriverError, Neo4jError, OSError) as e:
         driver.close()
-        raise Neo4jUnavailable(str(e)) from e
+        raise Neo4jUnavailable(_first_line(e)) from e
 
     nodes: dict[str, list] = defaultdict(list)
     edges: dict[tuple, list] = defaultdict(list)
@@ -64,6 +71,8 @@ def load(graph: dict, settings: Settings) -> dict:
                 for chunk in _chunks(rows):
                     s.run(f"UNWIND $rows AS row MATCH (a:{sl} {{id: row.source}}) MATCH (b:{tl} {{id: row.target}}) "
                           f"MERGE (a)-[r:{etype}]->(b) SET r += row.props", rows=chunk).consume()
+    except (DriverError, Neo4jError) as e:
+        raise Neo4jUnavailable(f"load interrupted: {_first_line(e)}") from e
     finally:
         driver.close()
     return {"nodes": sum(len(v) for v in nodes.values()), "edges": sum(len(v) for v in edges.values())}

@@ -90,11 +90,20 @@ def _add_citations(g: Graph, records: list[Record]) -> None:
                 g.add_node(tgt_id, "Authority",
                            {"canon_id": c.id, "display": c.display, "kind": c.kind,
                             "in_corpus": False, "resolved": False},
-                           evidence=[ev] if ev else [],
+                           evidence=[{**ev, "case_id": r.id}] if ev else [],
                            provenance="deterministic" if ev else "unverified",
                            confidence=1.0 if ev else 0.5)
             g.add_edge("CITES", r.id, tgt_id, basis="detected_citation", confidence=1.0, evidence=ev,
                        props={"scope": scope})
+
+
+def _title_section(canon_id: str) -> dict:
+    """usc:8_1182 -> title 8, section 1182; cfr:8_1003 -> title 8, part 1003; ina:245 -> section 245."""
+    scheme, _, rest = canon_id.partition(":")
+    if scheme == "ina":
+        return {"title_no": None, "section": rest}
+    title, _, num = rest.partition("_")
+    return {"title_no": title, "part" if scheme == "cfr" else "section": num}
 
 
 def _add_statutes(g: Graph, records: list[Record], ds: DatasetConfig) -> None:
@@ -105,8 +114,8 @@ def _add_statutes(g: Graph, records: list[Record], ds: DatasetConfig) -> None:
             grouped.setdefault(m.canon_id, []).append(m)
         for cid, ms in grouped.items():
             label = "Regulation" if ms[0].kind == "regulation" else "Statute"
-            g.add_node(cid, label, {"canon_id": cid, "display": ms[0].display},
-                       evidence=[{"page": ms[0].page, "quote": ms[0].quote}])
+            g.add_node(cid, label, {"canon_id": cid, "display": ms[0].display, **_title_section(cid)},
+                       evidence=[{"case_id": r.id, "page": ms[0].page, "quote": ms[0].quote}])
             for m in ms[:MAX_EVIDENCE]:
                 g.add_edge("MENTIONS_STATUTE", r.id, cid, confidence=1.0,
                            evidence={"page": m.page, "quote": m.quote}, props={"count": len(ms)})
