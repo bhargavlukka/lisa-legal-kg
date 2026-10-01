@@ -1,6 +1,6 @@
 # Phase 1 — Graph Foundation (Design Spec)
 
-Date: 2026-10-01 · Project: LISA Legal Knowledge-Graph Research Agent · Status: approved in brainstorming, pending written review
+Date: 2026-10-01 · Project: LISA Legal Knowledge-Graph Research Agent · Status: approved
 
 ## 1. Context
 
