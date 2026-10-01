@@ -1,0 +1,5 @@
+name: gold_eval
+sources:
+  - {path: gold_cases/records_immigration.jsonl, domain: immigration}
+  - {path: gold_cases/records_litigation.jsonl, domain: litigation}
+cross_domain: []

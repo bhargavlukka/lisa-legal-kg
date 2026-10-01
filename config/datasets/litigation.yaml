@@ -1,0 +1,4 @@
+name: litigation
+sources:
+  - {path: pack_litigation/records.jsonl, domain: litigation}
+cross_domain: []

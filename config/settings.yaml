@@ -1,0 +1,2 @@
+out_dir: out
+neo4j_uri: bolt://localhost:7687

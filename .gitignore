@@ -7,3 +7,5 @@ out/
 cache/
 data/
 *.jsonl
+.superpowers/
+*.egg-info/
