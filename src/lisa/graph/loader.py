@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lisa.common.config import DatasetConfig
 
-REQUIRED = ("id", "title", "citation")
+REQUIRED = ("id", "title")  # citation may be absent (slip opinions not yet in U.S. Reports)
 
 
 class ChecksumError(RuntimeError):
@@ -20,7 +20,7 @@ class Record:
     id: str
     domain: str
     title: str
-    citation: str
+    citation: str | None
     props: dict
     pages: list[dict]
     text: str
@@ -74,7 +74,7 @@ def load_records(data_dir: Path, ds: DatasetConfig) -> tuple[list[Record], list[
                     id=raw[src.fields["id"]],
                     domain=src.domain,
                     title=raw[src.fields["title"]],
-                    citation=raw[src.fields["citation"]],
+                    citation=raw.get(src.fields["citation"]) or None,
                     props=props,
                     pages=pages,
                     text=raw.get("text") or "\n".join(p["text"] for p in pages),

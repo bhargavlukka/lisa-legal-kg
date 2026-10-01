@@ -71,3 +71,16 @@ def test_find_evidence_respects_digit_boundaries():
     ev = find_evidence(pages, cite_pattern("15 I&N Dec. 775"))
     assert ev["page"] == 2
     assert "15 I&N\nDec. 775" in ev["quote"]
+
+
+def test_case_without_citation_gets_placeholder_canon_and_no_self_match():
+    from lisa.common.config import load_dataset
+    from lisa.graph.extract_det import build_graph
+    from lisa.graph.loader import Record
+    recs = [Record(id="scotus_2025_x", domain="litigation", title="Hamm v. Smith", citation=None, props={},
+                   pages=[{"page": 1, "text": "cites 585 U.S. 198"}], text="cites 585 U.S. 198",
+                   citations=["585 U.S. 198"])]
+    g = build_graph(recs, load_dataset("all")).to_json()
+    case = nodes_of(g, "Case")["scotus_2025_x"]
+    assert case["props"]["canon_cite"] == "nocite:scotus_2025_x"
+    assert ("scotus_2025_x", "auth:us:585_198") in edges_of(g, "CITES")

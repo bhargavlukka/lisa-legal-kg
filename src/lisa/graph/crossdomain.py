@@ -23,7 +23,9 @@ def _name_pattern(title: str) -> re.Pattern:
     return re.compile(r"\s+".join(re.escape(w) for w in squash(title).split(" ")), re.IGNORECASE)
 
 
-def _reporter_pattern(citation: str) -> re.Pattern | None:
+def _reporter_pattern(citation: str | None) -> re.Pattern | None:
+    if not citation:
+        return None
     c = canon(citation)
     if not c.id.startswith("us:"):
         return None

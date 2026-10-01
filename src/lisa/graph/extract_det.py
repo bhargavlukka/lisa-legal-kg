@@ -59,9 +59,13 @@ class Graph:
                 "nodes": [self.nodes[k] for k in sorted(self.nodes)], "edges": edges}
 
 
+def _canon_id(r: Record) -> str:
+    return canon(r.citation).id if r.citation else f"nocite:{r.id}"
+
+
 def _add_cases_and_pages(g: Graph, records: list[Record], ds: DatasetConfig) -> None:
     for r in records:
-        g.add_node(r.id, "Case", {**r.props, "canon_cite": canon(r.citation).id, "dataset": ds.name,
+        g.add_node(r.id, "Case", {**r.props, "canon_cite": _canon_id(r), "dataset": ds.name,
                                   "domain": r.domain, "legal_status": "not verified"}, evidence=[METADATA])
         for p in r.pages:
             pid = f"{r.id}#p{p['page']}"
@@ -70,9 +74,9 @@ def _add_cases_and_pages(g: Graph, records: list[Record], ds: DatasetConfig) -> 
 
 
 def _add_citations(g: Graph, records: list[Record]) -> None:
-    own = {canon(r.citation).id: r for r in records}
+    own = {canon(r.citation).id: r for r in records if r.citation}
     for r in records:
-        self_id = canon(r.citation).id
+        self_id = _canon_id(r)
         for raw in r.citations:
             c = canon(raw)
             if c.kind != "case" or c.id == self_id:

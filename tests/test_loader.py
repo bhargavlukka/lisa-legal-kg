@@ -40,8 +40,19 @@ def test_quarantines_bad_lines(mini_data):
     p = mini_data / "pack_immigration" / "records.jsonl"
     with open(p, "a", encoding="utf-8") as f:
         f.write("{not json\n")
-        f.write(json.dumps({"id": "eoir_9", "title": "X", "pages": [{"page": 1, "text": "x"}]}) + "\n")
+        f.write(json.dumps({"id": "eoir_9", "citation": "1 I&N Dec. 1", "pages": [{"page": 1, "text": "x"}]}) + "\n")
     recs, quarantine = load_records(mini_data, load_dataset("immigration"))
     assert [r.id for r in recs] == ["eoir_1", "eoir_2"]
     assert [q["reason"].split(":")[0] for q in quarantine] == ["bad json", "missing"]
     assert quarantine[1]["id"] == "eoir_9"
+
+
+def test_record_without_citation_still_loads(mini_data):
+    # recent slip opinions have no U.S. Reports citation yet; they must not be dropped
+    p = mini_data / "pack_litigation" / "records.jsonl"
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"id": "scotus_2025_x", "title": "Hamm v. Smith", "citation": None,
+                            "pages": [{"page": 1, "text": "slip opinion"}]}) + "\n")
+    recs, quarantine = load_records(mini_data, load_dataset("litigation"))
+    assert quarantine == []
+    assert recs[-1].id == "scotus_2025_x" and recs[-1].citation is None
