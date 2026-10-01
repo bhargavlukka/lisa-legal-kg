@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from lisa.common.config import DatasetConfig
+from lisa.graph import crossdomain
 from lisa.graph.canon import canon
 from lisa.graph.evidence import cite_pattern, find_evidence
 from lisa.graph.loader import Record
@@ -107,9 +108,19 @@ def _add_statutes(g: Graph, records: list[Record], ds: DatasetConfig) -> None:
                            evidence={"page": m.page, "quote": m.quote}, props={"count": len(ms)})
 
 
+def _add_cross_domain(g: Graph, records: list[Record], ds: DatasetConfig) -> None:
+    for from_domain, to_domain in ds.cross_domain:
+        sources = [r for r in records if r.domain == from_domain]
+        targets = [r for r in records if r.domain == to_domain]
+        for m in crossdomain.find_matches(sources, targets):
+            g.add_edge("CITES", m.source, m.target, basis=m.basis, confidence=crossdomain.CONFIDENCE[m.basis],
+                       evidence=m.evidence, props={"scope": "cross_domain"})
+
+
 def build_graph(records: list[Record], ds: DatasetConfig) -> Graph:
     g = Graph(ds.name)
     _add_cases_and_pages(g, records, ds)
     _add_citations(g, records)
     _add_statutes(g, records, ds)
+    _add_cross_domain(g, records, ds)
     return g
