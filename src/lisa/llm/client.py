@@ -52,7 +52,8 @@ class LLMClient:
         if not offline and settings.api_key:
             self._http = httpx.Client(
                 base_url=settings.base_url.rstrip("/") + "/", timeout=settings.timeout_s, transport=transport,
-                headers={"X-SharedLLM-Key": settings.api_key, "Authorization": f"Bearer {settings.api_key}"})
+                # Only the virtual key: a supplied Authorization header is forwarded upstream as-is.
+                headers={"X-SharedLLM-Key": settings.api_key})
 
     def _params(self) -> dict:
         p = {"model": self.settings.model, "temperature": self.settings.temperature,

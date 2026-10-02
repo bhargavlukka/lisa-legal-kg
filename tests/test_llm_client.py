@@ -33,6 +33,8 @@ def test_success_sends_headers_body_and_caches(tmp_path):
     req = seen[0]
     assert str(req.url) == "https://llm.test/openai/v1/chat/completions"
     assert req.headers["X-SharedLLM-Key"] == "k-test"
+    # the gateway forwards a supplied Authorization header to the upstream provider as-is (-> 401 there)
+    assert "authorization" not in req.headers
     body = json.loads(req.content)
     assert body["model"] == "test-model" and body["temperature"] == 0.0 and body["max_tokens"] == 1000
     assert body["response_format"] == {"type": "json_object"} and body["messages"] == MSG
