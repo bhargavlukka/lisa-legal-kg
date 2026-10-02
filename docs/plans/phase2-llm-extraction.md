@@ -17,7 +17,7 @@
 - Model identity lives in `config/settings.yaml` only (`llm.model`); no model string in code.
 - `temperature: 0`. Cache key = sha256(prompt_version + params incl. model + messages).
 - Every LLM-tier node/edge: `provenance` ∈ {`llm`, `unverified`}, `confidence` float 0–1, `evidence` list of `{page, quote, verified}` with quotes copied verbatim, `evidence_strength` ∈ {strong, moderate, weak}.
-- Phase 1 output (`out/graph_<dataset>.json`) must stay byte-identical. Baseline sha256 (2026-10-01): `graph_all` `8e5f4e91…3e9d`, `graph_gold_eval` `0fb14a9c…0cbd0e`, `graph_immigration` `2b542710…ce22`.
+- Phase 1 output (`out/graph_<dataset>.json`) must stay byte-identical. Baseline sha256 (main @ cd86316, rebuilt 2026-10-01): `graph_all` `8e5f4e91…3e9d`, `graph_gold_eval` `51f04874…0ee2`, `graph_immigration` `2c57762a…6a25`.
 - `pytest` never touches the network. Tests that need the real data use the `real_data_dir` fixture and skip when it is absent.
 - Few-shot units are fixed: `eoir_4018__u1of1` (immigration) and `scotus_2017_17-269__u1of1` (SCOTUS). They are never extracted in `gold_eval` runs and never scored (23 scored units).
 - Commits are authored by the repo owner only — **no co-author / tool attribution trailers**. After every task: tests green → commit → `git push` (branch `phase2-llm-extraction`).

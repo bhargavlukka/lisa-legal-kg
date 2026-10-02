@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from lisa.common.config import DatasetConfig
@@ -25,6 +25,7 @@ class Record:
     pages: list[dict]
     text: str
     citations: list[str]
+    pdf_pages: dict[int, int | None] = field(default_factory=dict)
 
 
 def _sha256(path: Path) -> str:
@@ -69,6 +70,7 @@ def load_records(data_dir: Path, ds: DatasetConfig) -> tuple[list[Record], list[
                     continue
                 props = {k: raw.get(v) for k, v in src.fields.items()}
                 props.update({k: raw.get(k) for k in src.extra})
+                pdf_pages = {p["page"]: p.get("source_pdf_page") for p in pages}
                 pages = [{"page": p["page"], "text": p["text"]} for p in pages]
                 records.append(Record(
                     id=raw[src.fields["id"]],
@@ -79,5 +81,6 @@ def load_records(data_dir: Path, ds: DatasetConfig) -> tuple[list[Record], list[
                     pages=pages,
                     text=raw.get("text") or "\n".join(p["text"] for p in pages),
                     citations=list(raw.get("citations_detected") or []),
+                    pdf_pages=pdf_pages,
                 ))
     return records, quarantine
