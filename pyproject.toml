@@ -16,3 +16,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+"lisa.extract" = ["prompts/*.md", "schema_signatures.json"]
