@@ -116,3 +116,16 @@ def test_cache_put_is_atomic_and_readable(tmp_path):
     assert cache.get(k) is None
     cache.put(k, {"x": "ü"})
     assert cache.get(k) == {"x": "ü"} and not list((tmp_path / "c").glob("*.tmp"))
+
+
+def test_bearer_auth_sends_authorization_only(tmp_path):
+    c, _, seen, _ = make(tmp_path, [(200, chat_payload("x"), {})], auth="bearer", api_key_env="OLLAMA_API_KEY")
+    c.complete(MSG, "v1")
+    assert seen[0].headers["Authorization"] == "Bearer k-test"
+    assert "x-sharedllm-key" not in seen[0].headers
+
+
+def test_missing_key_error_names_the_configured_env_var(tmp_path):
+    c, _, _, _ = make(tmp_path, [], api_key=None, auth="bearer", api_key_env="OLLAMA_API_KEY")
+    with pytest.raises(LLMError, match="OLLAMA_API_KEY is not set"):
+        c.complete(MSG, "v1")

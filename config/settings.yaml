@@ -2,8 +2,12 @@ out_dir: out
 neo4j_uri: bolt://localhost:7687
 
 llm:
-  base_url: https://api.sharedllm.com/openai/v1
-  model: z-ai/glm-flash-latest
+  # Ollama Cloud direct (free tier; SharedLLM pool keys were failing upstream on 2026-10-01).
+  # SharedLLM alternative: base_url https://api.sharedllm.com/openai/v1, auth sharedllm, api_key_env SHAREDLLM_API_KEY
+  base_url: https://ollama.com/v1
+  auth: bearer
+  api_key_env: OLLAMA_API_KEY
+  model: gpt-oss:120b
   temperature: 0
   max_output_tokens: 8192
   timeout_s: 180

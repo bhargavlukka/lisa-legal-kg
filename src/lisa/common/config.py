@@ -90,6 +90,8 @@ class LLMSettings:
     edge_split_chars: int
     include_unverified_in_graph: bool
     json_mode: bool
+    auth: str = "sharedllm"                  # sharedllm: X-SharedLLM-Key header | bearer: Authorization: Bearer
+    api_key_env: str = "SHAREDLLM_API_KEY"
 
 
 @dataclass(frozen=True)
@@ -102,10 +104,11 @@ def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REP
     if env_file is not None:
         load_dotenv(env_file)
     s = _yaml(config_dir / "settings.yaml").get("llm") or {}
+    key_env = s.get("api_key_env", "SHAREDLLM_API_KEY")
     return LLMSettings(
         base_url=s["base_url"],
         model=s["model"],
-        api_key=os.environ.get("SHAREDLLM_API_KEY") or None,
+        api_key=os.environ.get(key_env) or None,
         temperature=float(s.get("temperature", 0)),
         max_output_tokens=int(s.get("max_output_tokens", 8192)),
         timeout_s=float(s.get("timeout_s", 180)),
@@ -114,6 +117,8 @@ def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REP
         edge_split_chars=int(s.get("edge_split_chars", 60000)),
         include_unverified_in_graph=bool(s.get("include_unverified_in_graph", False)),
         json_mode=bool(s.get("json_mode", True)),
+        auth=s.get("auth", "sharedllm"),
+        api_key_env=key_env,
     )
 
 

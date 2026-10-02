@@ -42,6 +42,13 @@ def _completion(payload: dict, cached: bool) -> Completion:
                       int(usage.get("completion_tokens") or 0), cached)
 
 
+def _auth_headers(settings: LLMSettings) -> dict:
+    if settings.auth == "bearer":
+        return {"Authorization": f"Bearer {settings.api_key}"}
+    # SharedLLM: only the virtual key; a supplied Authorization header is forwarded upstream as-is.
+    return {"X-SharedLLM-Key": settings.api_key}
+
+
 class LLMClient:
     def __init__(self, settings: LLMSettings, cache: Cache, budget: Budget, stats: RunStats, *,
                  offline: bool = False, transport: httpx.BaseTransport | None = None, sleep=time.sleep,
@@ -52,8 +59,7 @@ class LLMClient:
         if not offline and settings.api_key:
             self._http = httpx.Client(
                 base_url=settings.base_url.rstrip("/") + "/", timeout=settings.timeout_s, transport=transport,
-                # Only the virtual key: a supplied Authorization header is forwarded upstream as-is.
-                headers={"X-SharedLLM-Key": settings.api_key})
+                headers=_auth_headers(settings))
 
     def _params(self) -> dict:
         p = {"model": self.settings.model, "temperature": self.settings.temperature,
@@ -72,7 +78,7 @@ class LLMClient:
         if self.offline:
             raise CacheMiss(f"offline and not cached: {key[:12]}")
         if self._http is None:
-            raise LLMError("SHAREDLLM_API_KEY is not set (add it to .env)")
+            raise LLMError(f"{self.settings.api_key_env} is not set (add it to .env)")
         body = {**params, "messages": messages}
         status, err = None, ""
         for attempt in range(1, MAX_ATTEMPTS + 1):
