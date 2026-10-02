@@ -1,2 +1,17 @@
 out_dir: out
 neo4j_uri: bolt://localhost:7687
+
+llm:
+  base_url: https://api.sharedllm.com/openai/v1
+  model: z-ai/glm-flash-latest
+  temperature: 0
+  max_output_tokens: 8192
+  timeout_s: 180
+  max_requests_per_run: 300
+  window_pages: 3
+  edge_split_chars: 60000
+  include_unverified_in_graph: false
+  json_mode: true
+eval:
+  match_threshold: 0.3
+  fewshot_units: [eoir_4018__u1of1, scotus_2017_17-269__u1of1]

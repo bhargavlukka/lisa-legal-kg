@@ -75,3 +75,49 @@ def load_dataset(name: str, config_dir: Path = CONFIG_DIR) -> DatasetConfig:
         ))
     cross = [(c["from_domain"], c["to_domain"]) for c in d.get("cross_domain") or []]
     return DatasetConfig(name=d["name"], sources=sources, cross_domain=cross)
+
+
+@dataclass(frozen=True)
+class LLMSettings:
+    base_url: str
+    model: str
+    api_key: str | None
+    temperature: float
+    max_output_tokens: int
+    timeout_s: float
+    max_requests_per_run: int
+    window_pages: int
+    edge_split_chars: int
+    include_unverified_in_graph: bool
+    json_mode: bool
+
+
+@dataclass(frozen=True)
+class EvalSettings:
+    match_threshold: float
+    fewshot_units: tuple[str, ...]
+
+
+def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> LLMSettings:
+    if env_file is not None:
+        load_dotenv(env_file)
+    s = _yaml(config_dir / "settings.yaml").get("llm") or {}
+    return LLMSettings(
+        base_url=s["base_url"],
+        model=s["model"],
+        api_key=os.environ.get("SHAREDLLM_API_KEY") or None,
+        temperature=float(s.get("temperature", 0)),
+        max_output_tokens=int(s.get("max_output_tokens", 8192)),
+        timeout_s=float(s.get("timeout_s", 180)),
+        max_requests_per_run=int(s.get("max_requests_per_run", 300)),
+        window_pages=int(s.get("window_pages", 3)),
+        edge_split_chars=int(s.get("edge_split_chars", 60000)),
+        include_unverified_in_graph=bool(s.get("include_unverified_in_graph", False)),
+        json_mode=bool(s.get("json_mode", True)),
+    )
+
+
+def load_eval_settings(config_dir: Path = CONFIG_DIR) -> EvalSettings:
+    s = _yaml(config_dir / "settings.yaml").get("eval") or {}
+    return EvalSettings(match_threshold=float(s.get("match_threshold", 0.3)),
+                        fewshot_units=tuple(s.get("fewshot_units") or ()))
