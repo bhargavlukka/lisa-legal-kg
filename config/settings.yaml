@@ -9,7 +9,7 @@ llm:
   api_key_env: OLLAMA_API_KEY
   model: gpt-oss:120b
   temperature: 0
-  max_output_tokens: 8192
+  max_output_tokens: 16384   # gpt-oss spends output tokens on hidden reasoning
   timeout_s: 180
   max_requests_per_run: 300
   window_pages: 3

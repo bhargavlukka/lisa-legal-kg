@@ -74,3 +74,22 @@ def test_evidence_strength_rules():
     assert evidence_strength(["short quote here"]) == "moderate"
     assert evidence_strength(["one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"]) == "strong"
     assert evidence_strength(["a b c", "d e f"]) == "strong"
+
+
+def test_trailing_punctuation_added_by_model_is_ignored():
+    assert IDX.locate("The respondent was lawfully admitted for permanent.", 1).page == 1
+
+
+def test_ellipsis_joined_pieces_verify_when_each_piece_is_verbatim_in_order():
+    sp = IDX.locate("We find that the admission ... The Board agrees with the Immigration Judge", 2)
+    assert sp and sp.page == 2 and sp.end - sp.start > len("WefindthattheadmissionTheBoardagrees")
+    assert IDX.locate("We find that the admission … The appeal is dismissed.", 2).page == 2
+
+
+def test_ellipsis_pieces_out_of_order_or_missing_fail():
+    assert IDX.locate("The appeal is dismissed. ... We find that the admission", 2) is None
+    assert IDX.locate("We find that the admission ... a sentence that is invented", 2) is None
+
+
+def test_ellipsis_quote_needs_one_long_piece():
+    assert IDX.locate("The ... Court ... was", 3) is None

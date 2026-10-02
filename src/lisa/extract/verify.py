@@ -9,12 +9,18 @@ MIN_QUOTE = 12          # squashed chars; shorter quotes ("the Court") match any
 DEFAULT_CONFIDENCE = 0.7
 
 _MARKERS = re.compile(r"<<<PART BEGINS:[^>]*>>>|=====\s*\[\[PAGE[^\]]*\]\]\s*=====")
+_ELLIPSIS = re.compile(r"\[?(?:\.\s*){3}\]?|…")
 _DROP = re.compile("[\\s\\-­‐-―\"'`‘-‟′″�]+")
 
 
 def squash(s: str) -> str:
     """Matching key: page/part markers removed, then whitespace, hyphens/dashes and all quote marks dropped."""
     return _DROP.sub("", _MARKERS.sub("", s))
+
+
+def _pieces(quote: str) -> list[str]:
+    """Squashed quote pieces split at ellipses; edge punctuation a model adds ("... residence.") is dropped."""
+    return [p for p in (squash(x).strip(".,;:") for x in _ELLIPSIS.split(quote or "")) if p]
 
 
 @dataclass(frozen=True)
@@ -44,15 +50,21 @@ class PageIndex:
         return self.pages[bisect.bisect_right(self._starts, offset) - 1]
 
     def locate(self, quote: str, page: int | None) -> Span | None:
-        q = squash(quote or "")
-        if len(q) < MIN_QUOTE or page not in self._start:
+        pieces = _pieces(quote)
+        if not pieces or max(map(len, pieces)) < MIN_QUOTE or page not in self._start:
             return None
         i = self.pages.index(page)
         prev, nxt = self.pages[max(i - 1, 0)], self.pages[min(i + 1, len(self.pages) - 1)]
         for lo, hi in ((self._start[page], self._end[nxt]), (self._start[prev], self._end[nxt])):
-            k = self.text.find(q, lo, hi)
-            if k >= 0:
-                return Span(self.page_at(k), k, k + len(q))
+            pos, start = lo, None
+            for piece in pieces:          # every piece verbatim, in order
+                k = self.text.find(piece, pos, hi)
+                if k < 0:
+                    break
+                start = k if start is None else start
+                pos = k + len(piece)
+            else:
+                return Span(self.page_at(start), start, pos)
         return None
 
 

@@ -50,7 +50,7 @@ def test_run_writes_tier_graph_and_manifest(env):
     r = run("immigration", settings=env, llm=llm_settings(), ev=EV, transport=transport(calls))
     assert r.status == "complete" and len(calls) == 3   # eoir_1 nodes+edges, eoir_2 nodes (no nodes -> no edge call)
     out = json.loads(r.output.read_text(encoding="utf-8"))
-    assert out["model"] == "test-model" and out["prompt_versions"] == {"nodes": "nodes-v1", "edges": "edges-v1"}
+    assert out["model"] == "test-model" and out["prompt_versions"] == {"nodes": "nodes-v1", "edges": "edges-v2"}
     u1 = next(u for u in out["units"] if u["case_id"] == "eoir_1")
     assert u1["status"] == "ok" and len(u1["nodes"]) == 3 and len(u1["edges"]) == 1
     assert all(n["provenance"] == "llm" for n in u1["nodes"]) and out["pending"] == []
