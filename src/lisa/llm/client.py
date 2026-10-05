@@ -45,6 +45,10 @@ def _completion(payload: dict, cached: bool) -> Completion:
 def _auth_headers(settings: LLMSettings) -> dict:
     if settings.auth == "bearer":
         return {"Authorization": f"Bearer {settings.api_key}"}
+    if settings.auth == "sharedllm_byok":
+        # SharedLLM forwards a supplied Authorization header upstream, so the gateway serves the request with our
+        # own provider key instead of injecting a pool key.
+        return {"X-SharedLLM-Key": settings.api_key, "Authorization": f"Bearer {settings.provider_key}"}
     # SharedLLM: only the virtual key; a supplied Authorization header is forwarded upstream as-is.
     return {"X-SharedLLM-Key": settings.api_key}
 
@@ -56,7 +60,10 @@ class LLMClient:
         self.settings, self.cache, self.budget, self.stats = settings, cache, budget, stats
         self.offline, self.sleep, self.rng = offline, sleep, rng or random.Random()
         self._http = None
-        if not offline and settings.api_key:
+        self._missing = (settings.api_key_env if not settings.api_key else
+                         settings.provider_key_env if settings.auth == "sharedllm_byok" and not settings.provider_key
+                         else None)
+        if not offline and self._missing is None:
             self._http = httpx.Client(
                 base_url=settings.base_url.rstrip("/") + "/", timeout=settings.timeout_s, transport=transport,
                 headers=_auth_headers(settings))
@@ -78,7 +85,7 @@ class LLMClient:
         if self.offline:
             raise CacheMiss(f"offline and not cached: {key[:12]}")
         if self._http is None:
-            raise LLMError(f"{self.settings.api_key_env} is not set (add it to .env)")
+            raise LLMError(f"{self._missing} is not set (add it to .env)")
         body = {**params, "messages": messages}
         status, err = None, ""
         for attempt in range(1, MAX_ATTEMPTS + 1):

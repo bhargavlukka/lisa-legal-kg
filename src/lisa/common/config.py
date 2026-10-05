@@ -91,7 +91,9 @@ class LLMSettings:
     include_unverified_in_graph: bool
     json_mode: bool
     auth: str = "sharedllm"                  # sharedllm: X-SharedLLM-Key header | bearer: Authorization: Bearer
-    api_key_env: str = "SHAREDLLM_API_KEY"
+    api_key_env: str = "SHAREDLLM_API_KEY"   # | sharedllm_byok: X-SharedLLM-Key + provider key as Bearer
+    provider_key: str | None = None
+    provider_key_env: str | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +121,8 @@ def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REP
         json_mode=bool(s.get("json_mode", True)),
         auth=s.get("auth", "sharedllm"),
         api_key_env=key_env,
+        provider_key=os.environ.get(s["provider_key_env"]) or None if s.get("provider_key_env") else None,
+        provider_key_env=s.get("provider_key_env"),
     )
 
 

@@ -129,3 +129,17 @@ def test_missing_key_error_names_the_configured_env_var(tmp_path):
     c, _, _, _ = make(tmp_path, [], api_key=None, auth="bearer", api_key_env="OLLAMA_API_KEY")
     with pytest.raises(LLMError, match="OLLAMA_API_KEY is not set"):
         c.complete(MSG, "v1")
+
+
+def test_sharedllm_byok_sends_gateway_key_and_provider_bearer(tmp_path):
+    c, _, seen, _ = make(tmp_path, [(200, chat_payload("x"), {})], auth="sharedllm_byok",
+                         provider_key="prov-key", provider_key_env="OLLAMA_API_KEY")
+    c.complete(MSG, "v1")
+    assert seen[0].headers["X-SharedLLM-Key"] == "k-test"
+    assert seen[0].headers["Authorization"] == "Bearer prov-key"
+
+
+def test_sharedllm_byok_requires_provider_key(tmp_path):
+    c, _, _, _ = make(tmp_path, [], auth="sharedllm_byok", provider_key=None, provider_key_env="OLLAMA_API_KEY")
+    with pytest.raises(LLMError, match="OLLAMA_API_KEY is not set"):
+        c.complete(MSG, "v1")

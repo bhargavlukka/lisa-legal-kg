@@ -2,11 +2,13 @@ out_dir: out
 neo4j_uri: bolt://localhost:7687
 
 llm:
-  # Ollama Cloud direct (free tier; SharedLLM pool keys were failing upstream on 2026-10-01).
-  # SharedLLM alternative: base_url https://api.sharedllm.com/openai/v1, auth sharedllm, api_key_env SHAREDLLM_API_KEY
-  base_url: https://ollama.com/v1
-  auth: bearer
-  api_key_env: OLLAMA_API_KEY
+  # Standard path (spec 4.2): SharedLLM gateway. Its pooled upstream keys are rejected (401/402, 2026-10-05), so we
+  # send our own Ollama Cloud key as the provider bearer and the gateway forwards it (sharedllm.com/docs: "If you
+  # omit [Authorization] the gateway injects a contributed or pooled key"). z-ai/glm-flash-latest is not served.
+  base_url: https://api.sharedllm.com/ollama/v1
+  auth: sharedllm_byok
+  api_key_env: SHAREDLLM_API_KEY
+  provider_key_env: OLLAMA_API_KEY
   model: gpt-oss:120b
   temperature: 0
   max_output_tokens: 16384   # gpt-oss spends output tokens on hidden reasoning

@@ -62,8 +62,10 @@ def test_llm_settings_from_yaml_and_env(monkeypatch, tmp_path):
 
 def test_repo_llm_settings_have_model_and_fewshot(monkeypatch):
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.delenv("SHAREDLLM_API_KEY", raising=False)
     s = load_llm_settings(env_file=None)
-    assert s.model == "gpt-oss:120b" and s.auth == "bearer" and s.api_key is None
+    assert s.model == "gpt-oss:120b" and s.auth == "sharedllm_byok" and s.api_key is None
+    assert s.base_url.startswith("https://api.sharedllm.com/")
     assert load_eval_settings().fewshot_units == ("eoir_4018__u1of1", "scotus_2017_17-269__u1of1")
 
 
@@ -75,3 +77,13 @@ def test_llm_settings_bearer_auth_reads_named_env(monkeypatch, tmp_path):
     monkeypatch.setenv("SHAREDLLM_API_KEY", "other")
     s = load_llm_settings(config_dir=tmp_path, env_file=None)
     assert (s.auth, s.api_key_env, s.api_key) == ("bearer", "OLLAMA_API_KEY", "ok-key")
+
+
+def test_llm_settings_sharedllm_byok_reads_both_keys(monkeypatch, tmp_path):
+    (tmp_path / "settings.yaml").write_text(
+        "llm:\n  base_url: https://api.sharedllm.com/ollama/v1\n  model: gpt-oss:120b\n  auth: sharedllm_byok\n"
+        "  api_key_env: SHAREDLLM_API_KEY\n  provider_key_env: OLLAMA_API_KEY\n", encoding="utf-8")
+    monkeypatch.setenv("OLLAMA_API_KEY", "prov")
+    monkeypatch.setenv("SHAREDLLM_API_KEY", "gw")
+    s = load_llm_settings(config_dir=tmp_path, env_file=None)
+    assert (s.auth, s.api_key, s.provider_key, s.provider_key_env) == ("sharedllm_byok", "gw", "prov", "OLLAMA_API_KEY")
