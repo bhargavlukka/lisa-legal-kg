@@ -1,0 +1,321 @@
+{
+ "pack": "LISA_Project_Package/data",
+ "created_utc": "2026-09-29T03:59:38.699845+00:00",
+ "files": [
+  {
+   "path": "gold_cases/records_immigration.jsonl",
+   "bytes": 853802,
+   "sha256": "de43f3718eba7913839320a3af6c0fd98e7fd0f4effb086a951851bd9fe6c445"
+  },
+  {
+   "path": "gold_cases/records_litigation.jsonl",
+   "bytes": 1789895,
+   "sha256": "3dcab1228b3e7e21b546932104abf9d975f29f0a3450376a4461ffa69e4f3dbb"
+  },
+  {
+   "path": "gold_standard/eoir_3371__u1of1.json",
+   "bytes": 135477,
+   "sha256": "81a15395bc076f68fd32232fa9401e856e0f2f75827c8123bd89ad70ff49d30d"
+  },
+  {
+   "path": "gold_standard/eoir_3380__u1of1.json",
+   "bytes": 404125,
+   "sha256": "8287b7fd28a32a917cf91948ae68bf98346f1d44237917286c9109402a91d1ac"
+  },
+  {
+   "path": "gold_standard/eoir_3395__u1of1.json",
+   "bytes": 316614,
+   "sha256": "6f2852abad021b309e4850caca92978b6afc335732fd4c561b08d29bfbd212ec"
+  },
+  {
+   "path": "gold_standard/eoir_3422__u1of1.json",
+   "bytes": 160020,
+   "sha256": "60d1b349485877269fb3ef85abb807a34bf1f30f85d8d88064950e06be1738c6"
+  },
+  {
+   "path": "gold_standard/eoir_3440__u1of1.json",
+   "bytes": 167346,
+   "sha256": "933aebe0080ea0014bfbe6707f78df6a96b992d0b19cd49723c7e81fb78ba69c"
+  },
+  {
+   "path": "gold_standard/eoir_3458__u1of1.json",
+   "bytes": 146087,
+   "sha256": "d38501a6cc68c35bcadcc25da379144c1d3f7f90e4814da34b2d93c4ca24f671"
+  },
+  {
+   "path": "gold_standard/eoir_4018__u1of1.json",
+   "bytes": 85038,
+   "sha256": "9781f21c1079790b87be871076fd200ab02da3df62af2306dcba22052c5c22ea"
+  },
+  {
+   "path": "gold_standard/eoir_4104__u1of1.json",
+   "bytes": 94725,
+   "sha256": "d393945b4110434b199055c2ceb93d0e5a371e7f8152333e76399ec379898382"
+  },
+  {
+   "path": "gold_standard/eoir_4128__u1of1.json",
+   "bytes": 140096,
+   "sha256": "41cc239332d50f2be6411a75ad4f6a803180565408c095520c586c19a38c7d91"
+  },
+  {
+   "path": "gold_standard/eoir_4201__u1of1.json",
+   "bytes": 81366,
+   "sha256": "8ad0bad3c534a3558db9c862e2daf74dee376738227a2f616f99b5ed106f523f"
+  },
+  {
+   "path": "gold_standard/scotus_2017_16-402__u1of3.json",
+   "bytes": 282849,
+   "sha256": "b645ff3d9f83969be5417b499d8075bc2487fb264d7dd1c1c9570e5049c9a5cd"
+  },
+  {
+   "path": "gold_standard/scotus_2017_16-402__u2of3.json",
+   "bytes": 245437,
+   "sha256": "fba6690115a202e8b526956eaa2257a6195a39fc791766bd8b003ffdb425b4fe"
+  },
+  {
+   "path": "gold_standard/scotus_2017_16-402__u3of3.json",
+   "bytes": 333185,
+   "sha256": "c2bda35a19159734b1d086a552ba6e41bf40f7115250a703f02dc1f1f01c125f"
+  },
+  {
+   "path": "gold_standard/scotus_2017_17-269__u1of1.json",
+   "bytes": 9938,
+   "sha256": "8869b81766e3ce5161ea72ae94b22a521ebb3a72bd57a3ec4933a255fc477565"
+  },
+  {
+   "path": "gold_standard/scotus_2018_16-1498__u1of2.json",
+   "bytes": 294848,
+   "sha256": "8055056b6136edacf1366dbf9dc7ef388b63bcb490cf893a28543edbaf8e8c32"
+  },
+  {
+   "path": "gold_standard/scotus_2018_16-1498__u2of2.json",
+   "bytes": 77196,
+   "sha256": "f31d0a5782f8f26d821c4fd67c3124accfb67f47343ad11696cb334bc442e9d2"
+  },
+  {
+   "path": "gold_standard/scotus_2018_17-1606__u1of1.json",
+   "bytes": 188283,
+   "sha256": "74a08eb8526b6ddf6743991b79bec45a14b7b95b8ae69a7057dd20c5eb85efcf"
+  },
+  {
+   "path": "gold_standard/scotus_2019_19-177__u1of1.json",
+   "bytes": 128821,
+   "sha256": "cb6fe079d62d0d343e1cd8ead6d396eda0ceb9649799c744058b19c8087c75f4"
+  },
+  {
+   "path": "gold_standard/scotus_2021_21A244__u1of1.json",
+   "bytes": 289160,
+   "sha256": "cb371e0b0e20923a1ac9fbaf7b3e218002379d3ccfb56d8bedd5acc60ae85406"
+  },
+  {
+   "path": "gold_standard/scotus_2023_22-193__u1of1.json",
+   "bytes": 164028,
+   "sha256": "3423983368fbe932bbcbaa8928a2bcd19190bd3cdf8c23c62cf78248ff2c2298"
+  },
+  {
+   "path": "gold_standard/scotus_2024_24-275__u1of1.json",
+   "bytes": 192122,
+   "sha256": "073ee40fece6043645f39cf7506b719cbb423d90d09723ebde18862c4359e028"
+  },
+  {
+   "path": "gold_standard/scotus_2025_24-872__u1of2.json",
+   "bytes": 204996,
+   "sha256": "620bdf6f7a172a11b4855bafb77785857ecc5a17cc8d46f213db07a0f023366b"
+  },
+  {
+   "path": "gold_standard/scotus_2025_24-872__u2of2.json",
+   "bytes": 160548,
+   "sha256": "daa5934261a07d31fe84807c9febce3c40a6532138deb343e2b1e0806faf7c9b"
+  },
+  {
+   "path": "gold_standard/scotus_2025_25-197__u1of2.json",
+   "bytes": 225091,
+   "sha256": "271b607e7332efa9309933899d825e287333c8e8731a5319f1a3f45ea92477f7"
+  },
+  {
+   "path": "gold_standard/scotus_2025_25-197__u2of2.json",
+   "bytes": 119502,
+   "sha256": "f0911361ee9c528eec1a96c98569e6f42608770cf7ebb0109f03f11f75a3c3ed"
+  },
+  {
+   "path": "pack_immigration/records.jsonl",
+   "bytes": 2214383,
+   "sha256": "9471cb1b22ee7ec7f15949b6a5cd474257d7bb811e5079e02758c9cca8feea46"
+  },
+  {
+   "path": "pack_litigation/records.jsonl",
+   "bytes": 8288922,
+   "sha256": "62ffe8bc8a880d79451f567efe6699fdad2c84152a5b614050c45c43a264f1e5"
+  },
+  {
+   "path": "pilot_units/eoir_3371__u1of1.txt",
+   "bytes": 28283,
+   "sha256": "7c24a7f9e13d1c0717a0f356b8b61a40a5b6d1f4b1e430ce08602a4852c33b78"
+  },
+  {
+   "path": "pilot_units/eoir_3380__u1of1.txt",
+   "bytes": 90175,
+   "sha256": "4412266fee53296e20010dce483200dc8f5fb443c62da7fbc2421811eff5ceee"
+  },
+  {
+   "path": "pilot_units/eoir_3395__u1of1.txt",
+   "bytes": 89183,
+   "sha256": "d45d76fdc72767b187e472bf82abda37dd3b6bed0dbe407388362fa2fd014d59"
+  },
+  {
+   "path": "pilot_units/eoir_3422__u1of1.txt",
+   "bytes": 71678,
+   "sha256": "56fd9aabf6a7e2ba4f6235b8d253083a354d010bd8d930d1bd597e0addabe2f5"
+  },
+  {
+   "path": "pilot_units/eoir_3440__u1of1.txt",
+   "bytes": 52176,
+   "sha256": "b47e8e031d867ace33db73a7cf528c4df49bc8776f23f2b01d4adfa1e58a2d44"
+  },
+  {
+   "path": "pilot_units/eoir_3458__u1of1.txt",
+   "bytes": 41149,
+   "sha256": "f8b88d3de502b39c5bda2a2e5c7f9e741b241ee0ae2c54c81dedb37a656215c5"
+  },
+  {
+   "path": "pilot_units/eoir_4018__u1of1.txt",
+   "bytes": 7379,
+   "sha256": "15d038bae5ba677e7970f78de870ef94c00a848c2840a683f667abfa9a23dde2"
+  },
+  {
+   "path": "pilot_units/eoir_4104__u1of1.txt",
+   "bytes": 9399,
+   "sha256": "8e2f74745eddc84d3cb500e753253b19916d86e1ae363f565718e3df598f0a0b"
+  },
+  {
+   "path": "pilot_units/eoir_4128__u1of1.txt",
+   "bytes": 23984,
+   "sha256": "13c4a0cf3e4d7e4f25d2a6bb0b45d736ab14a87e96ad6b836baf61525f2a34d4"
+  },
+  {
+   "path": "pilot_units/eoir_4201__u1of1.txt",
+   "bytes": 10399,
+   "sha256": "f640fcd846ae900344b6a102837a03b3e44a39b4e2d0909c78883492e588066d"
+  },
+  {
+   "path": "pilot_units/scotus_2017_16-402__u1of3.txt",
+   "bytes": 93127,
+   "sha256": "234d88f5115585fecfcf7d23a8ac0c3fa58c3c35cb79f347b68787cfa716a1d3"
+  },
+  {
+   "path": "pilot_units/scotus_2017_16-402__u2of3.txt",
+   "bytes": 92469,
+   "sha256": "93660c74b79380cc0e6b27bcfafd3af85508d035847b5375752be4092acc1f8f"
+  },
+  {
+   "path": "pilot_units/scotus_2017_16-402__u3of3.txt",
+   "bytes": 70540,
+   "sha256": "925a9567526168652d9b28402b5a0bedf9830585f62dcdb1175fb53097f05e17"
+  },
+  {
+   "path": "pilot_units/scotus_2017_17-269__u1of1.txt",
+   "bytes": 4139,
+   "sha256": "aabd3e10604c696625d9ff04fbc21d8065859871d59121a265a3ecbcc4bafe66"
+  },
+  {
+   "path": "pilot_units/scotus_2018_16-1498__u1of2.txt",
+   "bytes": 92289,
+   "sha256": "5276dbd66f79a008b12fd9fabb636127f5d451012877fd293374462096c0adb5"
+  },
+  {
+   "path": "pilot_units/scotus_2018_16-1498__u2of2.txt",
+   "bytes": 12404,
+   "sha256": "3e394e8dae53876114498b6632ef233245d160a4b6448b11353ec31ef1bc4070"
+  },
+  {
+   "path": "pilot_units/scotus_2018_17-1606__u1of1.txt",
+   "bytes": 43657,
+   "sha256": "ad311aff9c85c24c830de699c4edf4727a9fd93c532fafe076f005776303aea1"
+  },
+  {
+   "path": "pilot_units/scotus_2019_19-177__u1of1.txt",
+   "bytes": 74420,
+   "sha256": "3c4892054be6198ae95729543f78f1ac304da2095b3684ea86b4523d7d6768be"
+  },
+  {
+   "path": "pilot_units/scotus_2021_21A244__u1of1.txt",
+   "bytes": 71386,
+   "sha256": "1ff6315bfdba7ccf76329a1cd4fab7c8e98002079854aeb205334d858ec7133d"
+  },
+  {
+   "path": "pilot_units/scotus_2023_22-193__u1of1.txt",
+   "bytes": 49143,
+   "sha256": "42c83438ccfc99811f126163adf94d007b20b474da68c2131464c51275adafde"
+  },
+  {
+   "path": "pilot_units/scotus_2024_24-275__u1of1.txt",
+   "bytes": 44355,
+   "sha256": "c36f868b434f77533fb0e8ce725591729a4fe8f3f02e80102cae999638d851aa"
+  },
+  {
+   "path": "pilot_units/scotus_2025_24-872__u1of2.txt",
+   "bytes": 93921,
+   "sha256": "20b1fc9a8934107732bd8bae368df8bb33ebbc3811e768ca21f277abff2755a9"
+  },
+  {
+   "path": "pilot_units/scotus_2025_24-872__u2of2.txt",
+   "bytes": 47235,
+   "sha256": "69dcb6e9c3728aaa12465476bb861b07b6760ad053ffaa23776a70f8c9393e14"
+  },
+  {
+   "path": "pilot_units/scotus_2025_25-197__u1of2.txt",
+   "bytes": 93126,
+   "sha256": "4f7b3091f342b83d31fcc00a378867aebf4bb31ae01ab8e83a66b3d963ecd9fb"
+  },
+  {
+   "path": "pilot_units/scotus_2025_25-197__u2of2.txt",
+   "bytes": 19123,
+   "sha256": "166eb156ad2dd2cb8f36f198b83cc74ddab18fb2bdfc93c458e195d46f27c7be"
+  },
+  {
+   "path": "pipeline_reference/build_graph.py",
+   "bytes": 8784,
+   "sha256": "48730eee21ac43fd347ff19ed518c16964c25189b237124cae5f6873aaa7b4f9"
+  },
+  {
+   "path": "pipeline_reference/canon.py",
+   "bytes": 1282,
+   "sha256": "57ab330ad51a125b78da98ebc226c7baa0678817956b47d549c0f3480f75378a"
+  },
+  {
+   "path": "pipeline_reference/chunk.py",
+   "bytes": 3472,
+   "sha256": "317dc2de9161e9b1a3ca0f6789aea0d3524452ffba437253c2e305e558931088"
+  },
+  {
+   "path": "pipeline_reference/ingest.py",
+   "bytes": 3352,
+   "sha256": "6413bd020cfccc1697cf1e886ce70ecd2c7322d7214303e65128c4c42b565b9d"
+  },
+  {
+   "path": "pipeline_reference/run_graphify.py",
+   "bytes": 672,
+   "sha256": "405c6f1650b0e6c825a70e3ddf71e08735710dd9440d1486ddeab4b030e3b806"
+  },
+  {
+   "path": "pipeline_reference/segment.py",
+   "bytes": 7354,
+   "sha256": "3f8dce21b5767e33207157bbf789135df9857bd4e9fdcb7430c1362d98cc8365"
+  },
+  {
+   "path": "pipeline_reference/show_examples.py",
+   "bytes": 1621,
+   "sha256": "812aea2510a3de9e836cd9aaa76b386715d2b08b6e26248b779c668bb1cf6d45"
+  },
+  {
+   "path": "pipeline_reference/verify.py",
+   "bytes": 5687,
+   "sha256": "115241161d7671b017cdca27bf10cce806959c738df65776c2e31ca8cdf44e0c"
+  },
+  {
+   "path": "selection_report.json",
+   "bytes": 18208,
+   "sha256": "c9747a6e9ad43e095385b606ffd243279ba14e3b66c262b9cf0462ae4f647a70"
+  }
+ ]
+}

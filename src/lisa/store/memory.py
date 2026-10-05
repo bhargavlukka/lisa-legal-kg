@@ -13,7 +13,7 @@ from pathlib import Path
 from lisa.graph.canon import canon, squash
 from lisa.store.text import BM25, snippet, tokens
 
-CITATION_EDGES = ("CITES", "FOLLOWS", "DISTINGUISHES", "OVERRULES")
+CITATION_EDGES = ("CITES", "FOLLOWS", "DISTINGUISHES", "OVERRULES", "CITES_LLM")
 STATUS = "not verified; may have subsequent treatment"
 
 

@@ -9,8 +9,9 @@ from neo4j.exceptions import DriverError, Neo4jError
 
 from lisa.common.config import Settings
 
-LABELS = ("Case", "Authority", "Statute", "Regulation", "Page")
-REL_TYPES = ("CITES", "MENTIONS_STATUTE", "HAS_PAGE")
+LABELS = ("Case", "Authority", "Statute", "Regulation", "Page", "Doctrine", "Judge")
+REL_TYPES = ("CITES", "MENTIONS_STATUTE", "HAS_PAGE",                                   # deterministic tier
+             "FOLLOWS", "DISTINGUISHES", "OVERRULES", "CITES_LLM", "INVOKES_DOCTRINE", "AUTHORED_BY")  # LLM tier
 BATCH = 500
 
 
@@ -31,6 +32,23 @@ def _first_line(e: Exception) -> str:
 
 def _chunks(rows: list) -> list[list]:
     return [rows[i:i + BATCH] for i in range(0, len(rows), BATCH)]
+
+
+def merge(graphs: list[dict]) -> dict:
+    """Deterministic graph first, LLM-tier graphs after; first node per id wins, dangling edges dropped."""
+    nodes: dict[str, dict] = {}
+    for g in graphs:
+        for n in g["nodes"]:
+            nodes.setdefault(n["id"], n)
+    edges, seen = [], set()
+    for g in graphs:
+        for e in g["edges"]:
+            key = (e["type"], e["source"], e["target"])
+            if key in seen or e["source"] not in nodes or e["target"] not in nodes:
+                continue
+            seen.add(key)
+            edges.append({**e, "source_label": nodes[e["source"]]["label"], "target_label": nodes[e["target"]]["label"]})
+    return {"nodes": list(nodes.values()), "edges": edges}
 
 
 def load(graph: dict, settings: Settings) -> dict:

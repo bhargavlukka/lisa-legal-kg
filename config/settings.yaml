@@ -24,7 +24,7 @@ eval:
 
 serve:
   dataset: all                 # which deterministic graph the servers serve (out/graph_<dataset>.json)
-  llm_graphs: [gold_eval]      # LLM-tier graphs merged on top (out/graph_<name>_llm.json)
+  llm_graphs: [all]           # LLM-tier graph of the served cases (out/graph_all_llm.json, scripts/enrich_llm.py)
   backend: memory              # memory | neo4j
   host: 127.0.0.1
   ports: {graph: 8101, verifier: 8102, analytics: 8103, external: 8104}

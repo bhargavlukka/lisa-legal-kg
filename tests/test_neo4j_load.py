@@ -51,3 +51,17 @@ def test_malformed_uri_is_reported_as_unavailable(tmp_path, graph_all):
                  neo4j_password="x" * 8)
     with pytest.raises(Neo4jUnavailable):
         load(graph_all, s)
+
+
+def test_merge_labels_llm_edges_and_drops_dangling():
+    from lisa.graph.neo4j_load import LABELS, REL_TYPES, merge
+    det = {"nodes": [{"id": "c1", "label": "Case"}, {"id": "c2", "label": "Case"}], "edges": []}
+    llm = {"nodes": [{"id": "d1", "label": "Doctrine"}, {"id": "c1", "label": "Shadow"}],
+           "edges": [{"type": "FOLLOWS", "source": "c1", "target": "c2"},
+                     {"type": "INVOKES_DOCTRINE", "source": "c1", "target": "d1"},
+                     {"type": "FOLLOWS", "source": "c1", "target": "ghost"}]}
+    m = merge([det, llm])
+    assert {n["id"]: n["label"] for n in m["nodes"]} == {"c1": "Case", "c2": "Case", "d1": "Doctrine"}
+    assert [(e["type"], e["source_label"], e["target_label"]) for e in m["edges"]] == [
+        ("FOLLOWS", "Case", "Case"), ("INVOKES_DOCTRINE", "Case", "Doctrine")]
+    assert {"Doctrine", "Judge"} <= set(LABELS) and {"FOLLOWS", "DISTINGUISHES", "OVERRULES"} <= set(REL_TYPES)
