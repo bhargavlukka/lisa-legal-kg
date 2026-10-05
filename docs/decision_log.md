@@ -43,3 +43,78 @@ Consequences: every word of a verified quote is on the page; a spliced quote can
 ## 2026-10-01 — Quote length
 Gold evidence quotes are mostly 10–40 words, so the node prompt asks for 8–40 words (spec draft said ≤ 30);
 edge quotes 8–30 words.
+
+## 2026-10-05 — LLM path back on SharedLLM: own provider key through the gateway (`sharedllm_byok`)
+Context: the pooled upstream keys behind SharedLLM still fail (401/402), but the gateway forwards a supplied
+`Authorization` header upstream. The account's SharedLLM balance is the budget for this project.
+Decision: call `https://api.sharedllm.com/ollama/v1` with `X-SharedLLM-Key` (gateway) plus our Ollama key as Bearer
+(`llm.auth: sharedllm_byok`). Same model (`gpt-oss:120b`), so cached Phase 2 replies stay valid.
+Consequences: spec §4.2 path restored; the gateway's 1,000 requests/day cap applies, so runs are budgeted
+(`--max-requests`) and resumable from `out/llm_cache`. Supersedes the 2026-10-01 direct Ollama entry.
+
+## 2026-10-05 — Graph engine: Neo4j as the system of record, in-memory store as the default serving backend
+Context: hard requirement for a real graph store, but the dev laptop cannot run Docker Desktop, and the MCP servers
+must be testable without infrastructure. Alternatives considered: Neo4j only; a property-graph library (NetworkX)
+only; an RDF store (no need for ontologies/SPARQL; Cypher is easier to audit).
+Decision: one neutral graph JSON (`out/graph_<ds>.json` + `out/graph_<ds>_llm.json`) loaded into either Neo4j
+(`scripts/load_neo4j.py`, `LISA_GRAPH_BACKEND=neo4j`) or `MemoryStore` (BM25 search over pages). Both implement the
+same store interface, so servers are backend-agnostic.
+Consequences: tests and demos run anywhere; Neo4j adds Cypher exploration and the admin `run_cypher` tool
+(read-only). The two backends must stay behaviourally equal (shared tests).
+
+## 2026-10-05 — Four MCP servers over Streamable HTTP with JWT roles
+Context: spec asks for separately deployable tools with least privilege.
+Decision: graph, citation-verifier, analytics, external-law servers (ports 8101–8104), stateless Streamable HTTP
+with JSON responses; HS256 bearer tokens (`LISA_AUTH_SECRET`) with `researcher` (`lisa:read`) and `admin`
+(`+lisa:admin`) scopes; admin-only tools fail with a visible `ToolError`. stdio kept for local debugging.
+Consequences: each server scales/restarts independently; one shared secret is simple but must be rotated together
+(asymmetric keys would remove that coupling — noted in the threat model).
+
+## 2026-10-05 — Citation gate enforced in code, not only in the prompt
+Context: the model can ignore instructions; a legal answer with an invented quote is the worst failure.
+Decision: after the agent drafts, `verify_answer` runs from code; failed drafts get bounded revisions, then
+salvage (drop unsupported sentences, re-verify) or refusal. Tiers: verified_in_corpus / resolved_externally /
+unverified. Legal status is always reported as not verified.
+Consequences: answers can be refused even when partly right; latency rises by one verifier call per revision.
+
+## 2026-10-05 — Agent on the Claude Agent SDK driven through SharedLLM
+Context: spec asks for an agent framework with skills, subagents, hooks and memory; only SharedLLM credit is
+available.
+Decision: Claude Agent SDK with `ANTHROPIC_BASE_URL=https://api.sharedllm.com/ollama`, model `gpt-oss:120b`,
+`strict_mcp_config` (only our four servers), PreToolUse allow-list hook, `legal-research` skill, `citation-chaser`
+subagent, session memory in `out/sessions`. Trajectories logged to `out/trajectories.jsonl`.
+Consequences: framework features work with a non-Anthropic model, but tool-calling is slower (first verified answer
+took 589 s / 27 tool calls); the prompt now asks for fewer, targeted calls.
+
+## 2026-10-05 — LLM enrichment of the served 60 cases (separate from gold extraction)
+Context: the 20 gold-standard cases do not overlap the 60 served cases, so Phase 2 output adds no LLM edges to the
+served graph; full gold-schema extraction of the 60 would cost 1,000+ calls.
+Decision: two targeted prompts (`lisa.extract.enrich`): one treatment call per in-corpus CITES pair
+(FOLLOWS / DISTINGUISHES / OVERRULES or plain cite) and one metadata call per case (doctrines, author). A claim
+enters the graph only if its quote is found verbatim on the case's pages.
+Consequences: ~187 calls instead of 1,000+; precision of the enrichment is not gold-scored (the gold set measures
+the extractor, this pass reuses the same quote-verification guard).
+
+## 2026-10-05 — Parallel LLM requests
+Context: sequential calls ran at ~3 replies/min (15–25 s each).
+Decision: units/jobs run on a thread pool (`llm.workers: 6`, `--workers`); budget and stats are thread-safe;
+outputs keep input order; 429s back off per request.
+Consequences: ~17–18 replies/min observed; the daily request cap is reached sooner, so budgets stay explicit.
+
+## 2026-10-05 — CourtListener access: cache, persisted quota ledger, graceful degradation
+Decision: disk cache, self-imposed limits (5/min, 50/h, 125/day) persisted across restarts, 429 backoff; without a
+token or over quota the external tools return `unavailable` and the agent answers from the corpus only.
+Consequences: the external server never blocks an answer; external citations are marked `resolved_externally` or
+`unverified`, never `verified_in_corpus`.
+
+## 2026-10-05 — Observability with OpenTelemetry
+Decision: spans for every MCP tool call, verifier gate and agent turn; OTLP export when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set (Jaeger in compose), JSONL traces in `out/traces/` always.
+Consequences: traces are available even without a collector; JSONL files can be large and stay out of git.
+
+## 2026-10-05 — Packaging: one server image, one agent image, compose for the stack
+Decision: multi-stage `Dockerfile` (`server` target runs any of the four servers via `LISA_SERVER`; `agent` adds
+node + the claude CLI). Data and built graphs are bind-mounted, never baked in. `docker-compose.yml` runs neo4j,
+jaeger, the four servers, and the agent on demand (`--profile agent` / `docker compose run`).
+Consequences: images contain no case data or secrets. Compose validated with `docker compose config`; not run live
+on the dev laptop (no Docker engine).
