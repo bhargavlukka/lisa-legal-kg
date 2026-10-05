@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,7 +51,7 @@ def _fewshot(settings: Settings, ev: EvalSettings) -> tuple[str, str]:
 
 def run(dataset: str, *, settings: Settings, llm: LLMSettings, ev: EvalSettings, offline: bool = False,
         max_requests: int | None = None, only_units: set[str] | None = None, transport=None,
-        sleep=time.sleep) -> RunResult:
+        sleep=time.sleep, workers: int | None = None) -> RunResult:
     t0, started = time.monotonic(), datetime.now(timezone.utc)
     ds = load_dataset(dataset)
     verify_manifest(settings.data_dir, [s.path for s in ds.sources])
@@ -65,23 +66,25 @@ def run(dataset: str, *, settings: Settings, llm: LLMSettings, ev: EvalSettings,
     client = LLMClient(llm, Cache(settings.out_dir / "llm_cache"), budget, stats, offline=offline,
                        transport=transport, sleep=sleep)
 
-    done, status = [], "complete"
-    for i, u in enumerate(units):
-        failed_before = len(stats.failed)
+    def one(u: Unit) -> dict | None:
+        """Extract one unit; None when the request budget ran out (the unit stays pending)."""
         try:
             nodes = extract_nodes(u, client, sys_nodes, v_nodes, llm.window_pages, stats)
             edges = extract_edges(u, nodes, client, sys_edges, v_edges, llm.edge_split_chars, stats)
-            ustatus = "ok" if len(stats.failed) == failed_before else "partial"
+            ustatus = "partial" if any(f.get("unit") == u.unit_id for f in stats.failed) else "ok"
         except BudgetExhausted:
-            status = "budget_exhausted"
-            pending = [x.unit_id for x in units[i:]]
-            break
+            return None
         except CacheMiss:
             nodes, edges, ustatus = [], [], "not_cached"
-        done.append({"unit_id": u.unit_id, "case_id": u.case_id, "dataset": u.domain, "status": ustatus,
-                     "nodes": nodes, "edges": edges})
-    else:
-        pending = []
+        return {"unit_id": u.unit_id, "case_id": u.case_id, "dataset": u.domain, "status": ustatus,
+                "nodes": nodes, "edges": edges}
+
+    # Units are independent, so they run concurrently; results keep the unit order and the cache makes reruns resume.
+    with ThreadPoolExecutor(max_workers=max(1, workers or llm.workers)) as pool:
+        results = list(pool.map(one, units))
+    done = [r for r in results if r is not None]
+    pending = [u.unit_id for u, r in zip(units, results) if r is None]
+    status = "budget_exhausted" if pending else "complete"
 
     out_dir = settings.out_dir
     output, graph = out_dir / f"llm_{ds.name}.json", out_dir / f"graph_{ds.name}_llm.json"

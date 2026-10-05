@@ -18,6 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-requests", type=int, help="override llm.max_requests_per_run")
     ap.add_argument("--offline", action="store_true", help="serve only from out/llm_cache; never call the API")
     ap.add_argument("--units", help="comma-separated unit ids to run (default: all)")
+    ap.add_argument("--workers", type=int, help="parallel requests (default: llm.workers)")
     a = ap.parse_args(argv)
     try:
         settings, llm, ev = load_settings(), load_llm_settings(), load_eval_settings()
@@ -26,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         r = run(a.dataset, settings=settings, llm=llm, ev=ev, offline=a.offline, max_requests=a.max_requests,
-                only_units=set(a.units.split(",")) if a.units else None)
+                only_units=set(a.units.split(",")) if a.units else None, workers=a.workers)
     except (FileNotFoundError, KeyError) as e:
         print(f"config error: cannot load dataset {a.dataset!r}: {e}", file=sys.stderr)
         return 2

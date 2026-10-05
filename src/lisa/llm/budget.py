@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import threading
 from dataclasses import asdict, dataclass, field
 
 BASE_DELAY_S = 2.0
@@ -16,11 +17,13 @@ class Budget:
     def __init__(self, max_requests: int):
         self.max_requests = max_requests
         self.used = 0
+        self._lock = threading.Lock()
 
     def charge(self) -> None:
-        if self.used >= self.max_requests:
-            raise BudgetExhausted(f"request budget of {self.max_requests} reached")
-        self.used += 1
+        with self._lock:
+            if self.used >= self.max_requests:
+                raise BudgetExhausted(f"request budget of {self.max_requests} reached")
+            self.used += 1
 
 
 @dataclass

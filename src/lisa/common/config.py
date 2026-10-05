@@ -94,6 +94,7 @@ class LLMSettings:
     api_key_env: str = "SHAREDLLM_API_KEY"   # | sharedllm_byok: X-SharedLLM-Key + provider key as Bearer
     provider_key: str | None = None
     provider_key_env: str | None = None
+    workers: int = 1                         # parallel LLM requests per run
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,7 @@ def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REP
         api_key_env=key_env,
         provider_key=os.environ.get(s["provider_key_env"]) or None if s.get("provider_key_env") else None,
         provider_key_env=s.get("provider_key_env"),
+        workers=max(1, int(s.get("workers", 1))),
     )
 
 

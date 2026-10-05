@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import threading
 import time
 from dataclasses import dataclass
 
@@ -60,6 +61,7 @@ class LLMClient:
         self.settings, self.cache, self.budget, self.stats = settings, cache, budget, stats
         self.offline, self.sleep, self.rng = offline, sleep, rng or random.Random()
         self._http = None
+        self._lock = threading.Lock()
         self._missing = (settings.api_key_env if not settings.api_key else
                          settings.provider_key_env if settings.auth == "sharedllm_byok" and not settings.provider_key
                          else None)
@@ -80,7 +82,8 @@ class LLMClient:
         key = Cache.key(prompt_version, params, messages)
         hit = self.cache.get(key)
         if hit is not None:
-            self.stats.cache_hits += 1
+            with self._lock:
+                self.stats.cache_hits += 1
             return _completion(hit, cached=True)
         if self.offline:
             raise CacheMiss(f"offline and not cached: {key[:12]}")
@@ -90,7 +93,8 @@ class LLMClient:
         status, err = None, ""
         for attempt in range(1, MAX_ATTEMPTS + 1):
             self.budget.charge()
-            self.stats.requests += 1
+            with self._lock:
+                self.stats.requests += 1
             retry_after = None
             try:
                 r = self._http.post("chat/completions", json=body)
@@ -101,15 +105,18 @@ class LLMClient:
                     payload = r.json()
                     self.cache.put(key, payload)
                     c = _completion(payload, cached=False)
-                    self.stats.input_tokens += c.input_tokens
-                    self.stats.output_tokens += c.output_tokens
+                    with self._lock:
+                        self.stats.input_tokens += c.input_tokens
+                        self.stats.output_tokens += c.output_tokens
                     return c
                 status, err, retry_after = r.status_code, r.text[:300], r.headers.get("Retry-After")
                 if status == 429:
-                    self.stats.rate_limited += 1
+                    with self._lock:
+                        self.stats.rate_limited += 1
                 elif status < 500:
                     raise LLMError(f"HTTP {status}: {err}")
             if attempt < MAX_ATTEMPTS:
-                self.stats.retries += 1
+                with self._lock:
+                    self.stats.retries += 1
                 self.sleep(retry_delay(attempt, retry_after, self.rng))
         raise LLMError(f"gave up after {MAX_ATTEMPTS} attempts: {status} {err}")

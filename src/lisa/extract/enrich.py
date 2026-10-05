@@ -12,8 +12,10 @@ model capped by verification.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from lisa.common.config import load_dataset, load_llm_settings, load_settings
@@ -99,6 +101,11 @@ class Enricher:
         self.nodes: dict[str, dict] = {}
         self.edges: dict[tuple, dict] = {}
         self.dropped: Counter = Counter()
+        self._lock = threading.Lock()
+
+    def _drop(self, reason: str) -> None:
+        with self._lock:
+            self.dropped[reason] += 1
 
     def _verified(self, cid: str, quote, page) -> dict | None:
         try:
@@ -137,11 +144,11 @@ class Enricher:
         obj = _ask(self.client, SYS_TREAT, user, V_TREAT, self.stats)
         t = str(obj.get("treatment", "")).lower().strip()
         if t not in TREAT_EDGE:
-            self.dropped["treatment_cites"] += 1
+            self._drop("treatment_cites")
             return
         ev = self._verified(src, obj.get("quote"), obj.get("page"))
         if ev is None:
-            self.dropped["treatment_unverified_quote"] += 1
+            self._drop("treatment_unverified_quote")
             return
         self._edge(TREAT_EDGE[t], src, tgt, ev, _conf(obj.get("confidence")),
                    {"scope": e["props"].get("scope"), "treatment": t})
@@ -156,7 +163,7 @@ class Enricher:
                 continue
             ev = self._verified(cid, d.get("quote"), d.get("page"))
             if ev is None:
-                self.dropped["doctrine_unverified_quote"] += 1
+                self._drop("doctrine_unverified_quote")
                 continue
             name = " ".join(str(d["name"]).lower().split())
             did = f"doctrine:{slug(name)}"
@@ -166,7 +173,7 @@ class Enricher:
         if isinstance(a, dict) and str(a.get("name", "")).strip():
             ev = self._verified(cid, a.get("quote"), a.get("page"))
             if ev is None or surname(a["name"]).lower() not in ev["quote"].lower():
-                self.dropped["author_unverified"] += 1
+                self._drop("author_unverified")
                 return
             court = rec.props.get("court")
             jid = judge_id(court, a["name"])
@@ -178,7 +185,8 @@ class Enricher:
                 "edges": [self.edges[k] for k in sorted(self.edges)]}
 
 
-def run(dataset: str = "all", offline: bool = False, max_requests: int | None = None, transport=None) -> dict:
+def run(dataset: str = "all", offline: bool = False, max_requests: int | None = None, transport=None,
+        workers: int | None = None) -> dict:
     settings, llm = load_settings(), load_llm_settings()
     ds = load_dataset(dataset)
     verify_manifest(settings.data_dir, [s.path for s in ds.sources])
@@ -189,18 +197,26 @@ def run(dataset: str = "all", offline: bool = False, max_requests: int | None = 
     en = Enricher(records, det, client, stats)
     t0, started, status, failed = time.monotonic(), datetime.now(timezone.utc), "complete", Counter()
     jobs = [("treatment", e) for e in en.treatment_pairs()] + [("case", r.id) for r in records]
-    done = 0
-    for kind, job in jobs:
+
+    def one(job) -> str:
+        kind, arg = job
         try:
-            en.treat(job) if kind == "treatment" else en.case_meta(job)
-            done += 1
+            en.treat(arg) if kind == "treatment" else en.case_meta(arg)
+            return "done"
         except BudgetExhausted:
-            status = "budget_exhausted"
-            break
+            return "budget_exhausted"
         except CacheMiss:
-            failed["not_cached"] += 1
+            return "not_cached"
         except (Truncated, ExtractionFailed, LLMError) as e:
-            failed[type(e).__name__] += 1
+            return type(e).__name__
+
+    # Jobs are independent; run them concurrently (to_json sorts, so output does not depend on completion order).
+    with ThreadPoolExecutor(max_workers=max(1, workers or llm.workers)) as pool:
+        outcomes = Counter(pool.map(one, jobs))
+    done = outcomes.pop("done", 0)
+    if outcomes.pop("budget_exhausted", 0):
+        status = "budget_exhausted"
+    failed.update(outcomes)
     out = settings.out_dir / f"graph_{dataset}_llm.json"
     out.write_text(json.dumps(en.to_json(dataset), ensure_ascii=False, indent=1), encoding="utf-8")
     manifest = {"dataset": dataset, "model": llm.model, "status": status, "offline": offline,
@@ -220,8 +236,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dataset", default="all")
     ap.add_argument("--offline", action="store_true")
     ap.add_argument("--max-requests", type=int)
+    ap.add_argument("--workers", type=int)
     a = ap.parse_args(argv)
-    m = run(a.dataset, a.offline, a.max_requests)
+    m = run(a.dataset, a.offline, a.max_requests, workers=a.workers)
     print(json.dumps(m, indent=1))
     return 3 if m["status"] == "budget_exhausted" else 0
 
