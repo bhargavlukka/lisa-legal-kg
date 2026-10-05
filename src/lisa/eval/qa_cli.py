@@ -53,7 +53,8 @@ def model_failed(rec: dict) -> str | None:
     """Why a turn is not a real result (model never answered, or the provider failed mid-turn), else None."""
     if rec.get("status") == "error":
         return "agent error"
-    if not rec.get("input_tokens") and not rec.get("output_tokens"):
+    # some gateway routes report no usage, so zero tokens only means "no answer" when no draft was parsed either
+    if not rec.get("input_tokens") and not rec.get("output_tokens") and not (rec.get("draft") or {}).get("parsed"):
         return "model never answered"
     if _PROVIDER_ERROR.search(str((rec.get("draft") or {}).get("answer") or "")):
         return "provider error in draft"

@@ -121,3 +121,10 @@ def test_model_failure_detects_quota_errors_mid_turn():
     quota = {**ok, "status": "refused", "draft": {"answer": "API Error: Request rejected (429) · You reached the "
                                                             "Free usage limit."}}
     assert qa_cli.model_failed(quota)
+
+
+def test_parsed_answer_counts_even_when_the_gateway_reports_no_usage():
+    rec = {"status": "verified", "input_tokens": 0, "output_tokens": 0,
+           "draft": {"answer": "Matter of X [1].", "citations": [{"case_id": "eoir_1"}], "parsed": True}}
+    assert qa_cli.model_failed(rec) is None
+    assert qa_cli.model_failed({**rec, "draft": {"answer": "", "citations": [], "parsed": False}})

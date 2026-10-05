@@ -199,6 +199,9 @@ class ResearchAgent:
                 elif isinstance(m, ResultMessage):
                     sdk_id = m.session_id
                     final = m.result or last
+                    u = m.usage or {}                  # turn totals; per-message usage can be missing via the gateway
+                    traj.input_tokens = max(traj.input_tokens, int(u.get("input_tokens") or 0))
+                    traj.output_tokens = max(traj.output_tokens, int(u.get("output_tokens") or 0))
             return final or last
 
         with span("agent.ask", question=question, session=memory.name if memory else None) as sp:
