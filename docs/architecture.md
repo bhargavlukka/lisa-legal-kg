@@ -1,0 +1,97 @@
+# LISA architecture
+
+LISA answers legal research questions over two corpora (30 BIA / Attorney General immigration decisions, 30 U.S.
+Supreme Court opinions) by letting an LLM agent query a knowledge graph through MCP tools, and refusing to deliver
+any answer whose citations do not pass a deterministic verifier. This page maps the spec's six layers to code.
+Technology choices and their alternatives are in [decision_log.md](decision_log.md).
+
+```mermaid
+flowchart LR
+  DATA[("case packs<br/>(read-only, SHA-256 manifest)")] --> DET["deterministic tier<br/>build_graph.py"]
+  DATA --> LLMX["LLM tier<br/>extract_llm.py / enrich_llm.py"]
+  DET --> GJ[("graph JSON<br/>graph_all + graph_all_llm")]
+  LLMX --> GJ
+  GJ --> NEO[("Neo4j 5")]
+  GJ --> G["graph-server :8101"] & V["citation-verifier :8102"] & A["analytics-server :8103"]
+  X["external-law-server :8104"] <--> CL["CourtListener v4"]
+  V --> CL
+  AG["agent (Claude Agent SDK)<br/>skill + subagent + memory"] -->|JWT| G & V & A & X
+  AG --> GATE["code gate<br/>verify -> revise -> salvage -> refuse"] --> V
+  AG <--> LLM["SharedLLM gateway<br/>gpt-oss:120b"]
+  LLMX <--> LLM
+  G & V & A & X & AG -. OTel .-> J["Jaeger + out/traces"]
+```
+
+Full diagram (data flow, ports, budgets): [`diagrams/architecture.mmd`](../diagrams/architecture.mmd).
+
+## L1 - knowledge graph (`src/lisa/graph`, `src/lisa/extract`)
+
+| tier | produced by | nodes / edges | provenance |
+|---|---|---|---|
+| deterministic | `scripts/build_graph.py` (`graph/extract_det.py`, `canon.py`, `statutes.py`, `crossdomain.py`) | Case, Authority, Statute, Regulation, Page; CITES (internal / cross_domain / external), MENTIONS_STATUTE, HAS_PAGE | `deterministic`, confidence 1.0 or name-match score |
+| LLM | `scripts/extract_llm.py` (gold schema, scored), `scripts/enrich_llm.py` (the 60 served cases) | Doctrine, Judge; FOLLOWS, DISTINGUISHES, OVERRULES, INVOKES_DOCTRINE, AUTHORED_BY | `llm` when the model's supporting quote is found on the page, else `unverified` (kept out of the served graph) |
+
+The two tiers are written to separate files (`out/graph_<ds>.json`, `out/graph_<ds>_llm.json`) and merged only at
+load time, so the LLM tier can be dropped or rebuilt without touching the deterministic one. Domains are YAML
+(`config/domains/*.yaml`, `config/datasets/*.yaml`): switching corpus is a config change. Every node and edge carries
+`provenance`, `confidence` and page-anchored `evidence`; case legal status is always `not verified`.
+Neo4j is the system of record (`scripts/load_neo4j.py`); the servers can also serve from an in-memory store built
+from the same JSON (`serve.backend: memory | neo4j`), which keeps tests and laptops infrastructure-free.
+
+## L2 - MCP tool layer (`src/lisa/servers`, `src/lisa/tools`, `src/lisa/store`)
+
+Four FastMCP servers over streamable HTTP, launched together by `scripts/serve_all.py` or one container each.
+
+| server | tools (researcher) | admin-only |
+|---|---|---|
+| graph | search_cases, search_case_text, get_case, read_page, find_citing_cases, find_cited_cases, precedent_chain | graph_stats, run_cypher (read-only) |
+| citation-verifier | verify_citation, verify_answer | - |
+| analytics | most_cited_precedents (PageRank / in-degree), statute_frequency, doctrine_influence, cross_corpus_bridges | refresh_analytics |
+| external-law | resolve_citation, search_opinions, get_opinion_cluster, get_docket, quota_status | clear_cache |
+
+Case text leaves the servers only inside `<<<UNTRUSTED_CASE_TEXT ... UNTRUSTED_CASE_TEXT>>>` fences with injection
+flags (`common/untrusted.py`). The verifier resolves a citation to a corpus case and checks the quote against the
+stored page text (whitespace / typography normalized); out-of-corpus reporter citations go to CourtListener. Tiers:
+`verified_in_corpus`, `resolved_externally`, `unverified`. CourtListener calls (`common/courtlistener.py`) go through
+a disk cache keyed by request, a persisted per-minute/hour/day quota ledger, and exponential backoff honouring
+`Retry-After`; no token, exhausted quota or network failure returns a structured `unavailable` result.
+
+## L3 - agent (`src/lisa/agent`)
+
+`ResearchAgent.ask` runs one research turn with the Claude Agent SDK pointed at the SharedLLM Anthropic-compatible
+route. Wired in: the `legal-research` skill (`agent/.claude/skills/legal-research/SKILL.md`), the `citation-chaser`
+subagent (`agent/subagents/citation_chaser.py`), a PreToolUse hook that denies anything outside the MCP tool
+allowlist and records the trajectory, and `SessionMemory` (`out/sessions/<name>.json` digest + SDK session resume),
+so a session survives restarts.
+
+Guardrails are code, not prompt text (`agent/guardrails/gate.py`): the final JSON is parsed, sent to
+`verify_answer`, and on failure the model gets the problem list for up to `agent.max_revisions` revisions. If it
+still fails, sentences backed only by verified citations are salvaged and re-verified; otherwise the turn is refused.
+The delivered text is rendered by code: sources with their verifier tier, a fixed "legal status not verified"
+notice, and the advice disclaimer when the question asks for advice. Each turn is appended to
+`out/trajectories.jsonl`.
+
+## L4 - evaluation (`src/lisa/eval`, `config/eval`)
+
+- Extraction: `scripts/eval_extraction.py` - evidence-anchored P/R of the LLM tier against the gold standard,
+  threshold sweep and error buckets -> `docs/eval/extraction_report.md`.
+- QA: `scripts/eval_qa.py` runs the 28-question golden set (`config/eval/golden_questions.yaml`) through the KG
+  agent and a vector-RAG baseline (`eval/rag.py`: fastembed bge-small over page chunks, top-8, one call, same model,
+  same verifier gate). Scoring (`eval/qa.py`): recall/precision of verified in-corpus citations against expected
+  cases, expected behaviour (answer / refuse / disclaimer), latency, tokens, and trajectory checks (required tools
+  used, only allowlisted tools, `verify_answer` called by the model). Report: `docs/eval/qa_report.md`, analysed in
+  [evaluation_report.md](evaluation_report.md).
+
+## L5 - security and operations
+
+HS256 JWTs (`common/auth.py`) with `researcher` / `admin` roles on every server; threat analysis in
+[threat_model.md](threat_model.md). OpenTelemetry spans for agent turns, tool calls, verifier gate decisions and
+server tool executions (`common/tracing.py`) go to Jaeger over OTLP/HTTP and to `out/traces/*.jsonl`.
+`docker-compose.yml` brings up Neo4j, Jaeger, the four servers and (on demand) the agent; secrets come only from
+`.env`, servers get only the secrets they use, and all ports bind to 127.0.0.1. Rate-limit budgets: see
+[model_constraints.md](model_constraints.md).
+
+## Data never in the repo
+
+The case packs are mounted read-only from `LISA_DATA_DIR`. The repo holds the subset checksums (`data_manifest/manifest.json`) and
+`scripts/rebuild.sh` / `rebuild.ps1`, which verify the packs and rebuild every graph from scratch.

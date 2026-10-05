@@ -1,0 +1,43 @@
+%% LISA full system. Render: GitHub shows ```mermaid blocks natively (docs/architecture.md), or `npx @mermaid-js/mermaid-cli -i diagrams/architecture.mmd -o diagrams/architecture.svg`.
+flowchart LR
+  subgraph Host["Team-controlled host (docker compose)"]
+    direction LR
+    DATA[("LISA_Project_Package/data<br/>60 cases, pages, gold<br/>(read-only mount, manifest SHA-256)")]
+    subgraph Build["Offline build (scripts/rebuild.*)"]
+      DET["Deterministic tier<br/>build_graph.py<br/>CITES / MENTIONS_STATUTE / Page"]
+      LLMX["LLM tier<br/>extract_llm.py, enrich_llm.py<br/>FOLLOWS / DISTINGUISHES / OVERRULES<br/>doctrines, judges (quote-verified)"]
+    end
+    GJSON[("out/graph_all.json<br/>out/graph_all_llm.json")]
+    NEO[("Neo4j 5 Community<br/>(load_neo4j.py)")]
+    subgraph MCP["MCP servers - streamable HTTP, HS256 JWT (researcher / admin)"]
+      G["graph-server :8101<br/>search, get_case, read_page,<br/>citing / cited, precedent_chain"]
+      V["citation-verifier :8102<br/>verify_citation, verify_answer<br/>(deterministic firewall)"]
+      A["analytics-server :8103<br/>PageRank, statute freq,<br/>doctrine influence, bridges"]
+      X["external-law-server :8104<br/>CourtListener wrapper<br/>disk cache, quota ledger, 429 backoff"]
+    end
+    subgraph Agent["Research agent (Claude Agent SDK)"]
+      AG["ResearchAgent.ask<br/>legal-research skill<br/>citation-chaser subagent"]
+      GATE["Code gate: verify_answer -><br/>revise (x2) -> salvage -> refuse<br/>status note + advice disclaimer"]
+      MEM[("out/sessions/*.json<br/>session memory")]
+    end
+    J["Jaeger (OTLP/HTTP :4318)<br/>+ out/traces/*.jsonl"]
+    EV["Evaluation<br/>eval_extraction.py (gold P/R)<br/>eval_qa.py: KG agent vs RAG baseline"]
+  end
+  LLM["SharedLLM gateway<br/>api.sharedllm.com/ollama<br/>gpt-oss:120b (BYOK)"]
+  CL["CourtListener REST v4<br/>5/min, 50/h, 125/day"]
+
+  DATA --> DET --> GJSON
+  DATA --> LLMX --> GJSON
+  LLMX <-->|"OpenAI-compatible, cached"| LLM
+  GJSON --> NEO
+  GJSON --> G & V & A
+  NEO -. "backend: neo4j" .-> G & A
+  X <--> CL
+  V -->|"out-of-corpus cites<br/>(same client + cache)"| CL
+  AG <-->|"Anthropic-compatible"| LLM
+  AG -->|"Bearer JWT"| G & V & A & X
+  AG --> GATE --> V
+  AG <--> MEM
+  G & V & A & X & AG -. spans .-> J
+  EV --> AG
+  EV -->|"RAG: fastembed top-8 + 1 call"| LLM
