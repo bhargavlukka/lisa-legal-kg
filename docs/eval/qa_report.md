@@ -1,16 +1,16 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 1/28 questions run
+- kg: 5/28 questions run
 - rag: 28/28 questions run
 
 ## Summary
 
 | metric | kg | rag |
 |---|---|---|
-| n | 1 | 28 |
+| n | 5 | 28 |
 | recall | 1.000 | 0.288 |
-| precision | 0.923 | 0.479 |
+| precision | 0.902 | 0.479 |
 | behaviour_ok | 1.000 | 0.643 |
 | answered | 1.000 | 0.679 |
 | status_claims | 0 | 0 |
@@ -18,12 +18,12 @@
 | needs_tools_ok | 1.000 | - |
 | only_allowed_tools | 1.000 | - |
 | self_verified | 1.000 | - |
-| latency_mean_s | 574.100 | 9.000 |
-| latency_p50_s | 574.100 | 6.500 |
+| latency_mean_s | 257.400 | 9.000 |
+| latency_p50_s | 232.100 | 6.500 |
 | latency_max_s | 574.100 | 56.500 |
-| model_calls | 33 | 28 |
+| model_calls | 89 | 28 |
 | input_tokens | 0 | 90627 |
-| output_tokens | 49929 | 11272 |
+| output_tokens | 85935 | 11272 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
@@ -48,6 +48,10 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | id | category | status | recall | behaviour | latency s | missed |
 |---|---|---|---|---|---|---|
 | q01 | citing | verified | 1.000 | ok | 574.070 |  |
+| q02 | citing | verified | 1.000 | ok | 232.140 |  |
+| q03 | citing | verified | 1.000 | ok | 79.300 |  |
+| q04 | citing | verified | 1.000 | ok | 121.830 |  |
+| q05 | citing | verified | 1.000 | ok | 279.850 |  |
 
 ### rag
 
