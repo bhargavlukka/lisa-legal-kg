@@ -74,3 +74,6 @@ _Pending with section 2._
   context on every step (q07: 24 model calls / 265 k input tokens; q24: 78 calls / 2.7 M input tokens including two
   verifier-driven revisions).
 - The harness never records a turn in which the model did not answer (`qa_cli.py`), and every run is resumable.
+  The first no-token degradation attempt (q24) was discarded: the quota ran out mid-turn and the agent's "refusal"
+  was the provider's 429 text, not a graceful degradation. `model_failed()` now also rejects turns whose draft
+  carries a provider error, so such a turn can no longer be scored.

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 import sys
 from pathlib import Path
@@ -45,6 +46,20 @@ def _servers_up(agent) -> list[str]:
     return down
 
 
+_PROVIDER_ERROR = re.compile(r"API Error|\b429\b|usage limit|rate.?limit", re.I)
+
+
+def model_failed(rec: dict) -> str | None:
+    """Why a turn is not a real result (model never answered, or the provider failed mid-turn), else None."""
+    if rec.get("status") == "error":
+        return "agent error"
+    if not rec.get("input_tokens") and not rec.get("output_tokens"):
+        return "model never answered"
+    if _PROVIDER_ERROR.search(str((rec.get("draft") or {}).get("answer") or "")):
+        return "provider error in draft"
+    return None
+
+
 def run_kg(questions: list[dict], path: Path) -> int:
     import anyio
 
@@ -56,14 +71,15 @@ def run_kg(questions: list[dict], path: Path) -> int:
         return 2
     for q in questions:
         r = anyio.run(agent.ask, q["question"], None)
-        if r.status == "error" or (r.trajectory.input_tokens == 0 and r.trajectory.output_tokens == 0):
-            # the model path never answered (quota, 429, outage): not a result - stop so a rerun resumes here
-            print(f"{q['id']}: model unavailable, not recorded - stopping (rerun to resume)\n{r.text[-300:]}", flush=True)
-            return 3
         rec = {"id": q["id"], "system": "kg", "status": r.status, "text": r.text, "draft": r.draft,
                "report": r.report, "latency_s": round(r.latency_s, 2), "input_tokens": r.trajectory.input_tokens,
                "output_tokens": r.trajectory.output_tokens, "model_calls": r.trajectory.model_calls,
                "tools": r.trajectory.names(), "revisions": r.revisions, "gate_calls": r.gate_calls}
+        why = model_failed(rec)
+        if why:
+            # the model path failed (quota, 429, outage), possibly mid-turn: not a result - stop so a rerun resumes
+            print(f"{q['id']}: {why}, not recorded - stopping (rerun to resume)\n{r.text[-300:]}", flush=True)
+            return 3
         _append(path, rec)
         print(f"{q['id']}: {r.status} {r.latency_s:.0f}s tools={len(r.trajectory.tools)}", flush=True)
     return 0
