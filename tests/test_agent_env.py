@@ -14,7 +14,8 @@ def test_pure_sharedllm_sends_only_the_virtual_key():
     env = sdk_env(_s())
     assert env["ANTHROPIC_BASE_URL"] == "https://api.sharedllm.com/anthropic"
     assert env["ANTHROPIC_CUSTOM_HEADERS"] == "X-SharedLLM-Key: sk-sharedllm-x"
-    assert env["ANTHROPIC_API_KEY"] == "sk-sharedllm-x" and "ANTHROPIC_AUTH_TOKEN" not in env
+    # x-api-key is forwarded upstream as a provider key (401); the gateway accepts its own key as the bearer
+    assert env["ANTHROPIC_AUTH_TOKEN"] == "sk-sharedllm-x" and env["ANTHROPIC_API_KEY"] == ""
     assert env["ANTHROPIC_MODEL"] == env["CLAUDE_CODE_SUBAGENT_MODEL"] == "z-ai/glm-flash-latest"
 
 

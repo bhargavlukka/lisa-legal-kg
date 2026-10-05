@@ -88,9 +88,10 @@ def sdk_env(agent: AgentSettings) -> dict:
     if not agent.gateway_key:
         raise RuntimeError("SHAREDLLM_API_KEY must be set (see .env.example)")
     m = agent.model
-    auth = ({"ANTHROPIC_AUTH_TOKEN": agent.provider_key, "ANTHROPIC_API_KEY": ""} if agent.provider_key
-            else {"ANTHROPIC_API_KEY": agent.gateway_key})
-    return {"ANTHROPIC_BASE_URL": agent.base_url, **auth,
+    # The gateway forwards x-api-key upstream as a provider key (401 "API key is invalid"), but accepts its own virtual
+    # key as the bearer: so the CLI authenticates with ANTHROPIC_AUTH_TOKEN, never ANTHROPIC_API_KEY.
+    return {"ANTHROPIC_BASE_URL": agent.base_url, "ANTHROPIC_AUTH_TOKEN": agent.provider_key or agent.gateway_key,
+            "ANTHROPIC_API_KEY": "",
             "ANTHROPIC_CUSTOM_HEADERS": f"X-SharedLLM-Key: {agent.gateway_key}",
             "ANTHROPIC_MODEL": m, "ANTHROPIC_DEFAULT_HAIKU_MODEL": m, "ANTHROPIC_DEFAULT_SONNET_MODEL": m,
             "ANTHROPIC_DEFAULT_OPUS_MODEL": m, "CLAUDE_CODE_SUBAGENT_MODEL": m,
