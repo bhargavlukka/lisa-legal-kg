@@ -14,7 +14,7 @@ llm:
   max_output_tokens: 16384   # gpt-oss spends output tokens on hidden reasoning
   timeout_s: 180
   max_requests_per_run: 300
-  workers: 6                 # parallel requests (units/jobs run concurrently; 429s back off per request)
+  workers: 3                 # parallel requests; SharedLLM/Ollama returns 429 "too many concurrent requests" at 2x6
   window_pages: 3
   edge_split_chars: 60000
   include_unverified_in_graph: false
