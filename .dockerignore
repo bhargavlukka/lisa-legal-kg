@@ -1,0 +1,11 @@
+.env
+.venv/
+out/
+data/
+cache/
+.git/
+.superpowers/
+.pytest_cache/
+**/__pycache__/
+*.egg-info/
+*.jsonl

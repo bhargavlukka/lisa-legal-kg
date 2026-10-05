@@ -1,3 +1,28 @@
+# Full LISA stack: Neo4j, Jaeger (traces), the four MCP servers, and the research agent.
+#   docker compose --env-file .env up -d --build             # neo4j, jaeger, 4 servers
+#   docker compose --env-file .env run --rm agent "Which immigration decisions cite Pereira v. Sessions?"
+# Build the graphs first on the host (they are mounted from ./out): scripts/rebuild.sh or scripts/rebuild.ps1.
+# Secrets come from .env (never committed). LISA_GRAPH_BACKEND=neo4j serves from Neo4j instead of the JSON graphs
+# (load it with scripts/load_neo4j.py).
+
+x-server: &server
+  build: {context: ., target: server}
+  image: lisa-server
+  restart: unless-stopped
+  env_file: .env
+  environment: &server-env
+    LISA_HOST: 0.0.0.0
+    LISA_DATA_DIR: /data
+    LISA_OUT_DIR: /app/out
+    LISA_GRAPH_BACKEND: ${LISA_GRAPH_BACKEND:-memory}
+    NEO4J_URI: bolt://neo4j:7687
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  volumes:
+    - "${LISA_DATA_DIR:?set LISA_DATA_DIR in .env}:/data:ro"
+    - ./out:/app/out
+  depends_on:
+    jaeger: {condition: service_started}
+
 services:
   neo4j:
     image: neo4j:5-community
@@ -12,5 +37,50 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
       interval: 5s
       retries: 30
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # UI
+      - "4318:4318"     # OTLP/HTTP
+
+  graph:
+    <<: *server
+    environment: {<<: *server-env, LISA_SERVER: lisa.servers.graph_server}
+    ports: ["8101:8101"]
+
+  verifier:
+    <<: *server
+    environment: {<<: *server-env, LISA_SERVER: lisa.servers.citation_verifier}
+    ports: ["8102:8102"]
+
+  analytics:
+    <<: *server
+    environment: {<<: *server-env, LISA_SERVER: lisa.servers.analytics_server}
+    ports: ["8103:8103"]
+
+  external:
+    <<: *server
+    environment: {<<: *server-env, LISA_SERVER: lisa.servers.external_law_server}
+    ports: ["8104:8104"]
+
+  agent:
+    build: {context: ., target: agent}
+    image: lisa-agent
+    profiles: [agent]          # run on demand: docker compose run --rm agent "<question>"
+    env_file: .env
+    environment:
+      <<: *server-env
+      LISA_GRAPH_URL: http://graph:8101/mcp
+      LISA_VERIFIER_URL: http://verifier:8102/mcp
+      LISA_ANALYTICS_URL: http://analytics:8103/mcp
+      LISA_EXTERNAL_URL: http://external:8104/mcp
+    volumes:
+      - "${LISA_DATA_DIR:?set LISA_DATA_DIR in .env}:/data:ro"
+      - ./out:/app/out
+    depends_on: [graph, verifier, analytics, external]
+
 volumes:
   neo4j_data: {}
