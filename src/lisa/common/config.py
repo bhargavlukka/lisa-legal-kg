@@ -126,3 +126,64 @@ def load_eval_settings(config_dir: Path = CONFIG_DIR) -> EvalSettings:
     s = _yaml(config_dir / "settings.yaml").get("eval") or {}
     return EvalSettings(match_threshold=float(s.get("match_threshold", 0.3)),
                         fewshot_units=tuple(s.get("fewshot_units") or ()))
+
+
+@dataclass(frozen=True)
+class ServeSettings:
+    dataset: str
+    llm_graphs: tuple[str, ...]
+    backend: str
+    host: str
+    ports: dict[str, int]
+
+
+@dataclass(frozen=True)
+class AuthSettings:
+    issuer: str
+    audience: str
+    token_ttl_s: int
+    secret: str | None
+
+
+@dataclass(frozen=True)
+class CourtListenerSettings:
+    base_url: str
+    token: str | None
+    per_minute: int
+    per_hour: int
+    per_day: int
+    timeout_s: float
+    max_retries: int
+
+
+def load_serve_settings(config_dir: Path = CONFIG_DIR) -> ServeSettings:
+    s = _yaml(config_dir / "settings.yaml").get("serve") or {}
+    ports = {"graph": 8101, "verifier": 8102, "analytics": 8103, "external": 8104, **(s.get("ports") or {})}
+    return ServeSettings(dataset=os.environ.get("LISA_SERVE_DATASET") or s.get("dataset", "all"),
+                         llm_graphs=tuple(s.get("llm_graphs") or ()),
+                         backend=os.environ.get("LISA_GRAPH_BACKEND") or s.get("backend", "memory"),
+                         host=os.environ.get("LISA_HOST") or s.get("host", "127.0.0.1"),
+                         ports={k: int(v) for k, v in ports.items()})
+
+
+def load_auth_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> AuthSettings:
+    if env_file is not None:
+        load_dotenv(env_file)
+    s = _yaml(config_dir / "settings.yaml").get("auth") or {}
+    return AuthSettings(issuer=s.get("issuer", "lisa-auth"), audience=s.get("audience", "lisa-mcp"),
+                        token_ttl_s=int(s.get("token_ttl_s", 28800)),
+                        secret=os.environ.get(s.get("secret_env", "LISA_AUTH_SECRET")) or None)
+
+
+def load_courtlistener_settings(config_dir: Path = CONFIG_DIR,
+                                env_file: Path | None = REPO_ROOT / ".env") -> CourtListenerSettings:
+    if env_file is not None:
+        load_dotenv(env_file)
+    s = _yaml(config_dir / "settings.yaml").get("courtlistener") or {}
+    lim = s.get("limits") or {}
+    return CourtListenerSettings(
+        base_url=s.get("base_url", "https://www.courtlistener.com/api/rest/v4").rstrip("/"),
+        token=os.environ.get(s.get("token_env", "COURTLISTENER_TOKEN")) or None,
+        per_minute=int(lim.get("per_minute", 5)), per_hour=int(lim.get("per_hour", 50)),
+        per_day=int(lim.get("per_day", 125)), timeout_s=float(s.get("timeout_s", 30)),
+        max_retries=int(s.get("max_retries", 3)))
