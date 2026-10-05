@@ -46,10 +46,11 @@ def chunk_pages(pages: dict[str, dict[int, str]], size: int = 1500, overlap: int
     return out
 
 
-def fastembed_embedder(model: str = EMBED_MODEL) -> Callable[[list[str]], np.ndarray]:
+def fastembed_embedder(model: str = EMBED_MODEL, batch_size: int = 16) -> Callable[[list[str]], np.ndarray]:
+    """Small batches keep peak RAM low (the default 256 x 512-token batch needs >5 GB on the 8 GB-laptop target)."""
     from fastembed import TextEmbedding
     m = TextEmbedding(model)
-    return lambda texts: np.array(list(m.embed(texts)), dtype=np.float32)
+    return lambda texts: np.array(list(m.embed(texts, batch_size=batch_size)), dtype=np.float32)
 
 
 def _normalize(m: np.ndarray) -> np.ndarray:
