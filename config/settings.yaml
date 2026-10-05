@@ -2,14 +2,14 @@ out_dir: out
 neo4j_uri: bolt://localhost:7687
 
 llm:
-  # Standard path (spec 4.2): SharedLLM gateway. Its pooled upstream keys are rejected (401/402, 2026-10-05), so we
-  # send our own Ollama Cloud key as the provider bearer and the gateway forwards it (sharedllm.com/docs: "If you
-  # omit [Authorization] the gateway injects a contributed or pooled key"). z-ai/glm-flash-latest is not served.
-  base_url: https://api.sharedllm.com/ollama/v1
-  auth: sharedllm_byok
+  # Standard path (spec 4.2 / sharedllm.com/docs): SharedLLM gateway with the virtual key only (X-SharedLLM-Key, no
+  # provider Authorization) -> the gateway serves from our contributed keys first, then the pool (debits balance).
+  # The spec's z-ai/glm-flash-latest is served by the pool under the Custom provider as "~z-ai/glm-flash-latest"
+  # (dashboard Playground -> Export). Without the "~" the gateway falls back to contributed keys and fails.
+  base_url: https://api.sharedllm.com/custom-openai/v1
+  auth: sharedllm
   api_key_env: SHAREDLLM_API_KEY
-  provider_key_env: OLLAMA_API_KEY
-  model: gpt-oss:120b
+  model: "~z-ai/glm-flash-latest"
   temperature: 0
   max_output_tokens: 16384   # gpt-oss spends output tokens on hidden reasoning
   timeout_s: 180
@@ -41,9 +41,9 @@ courtlistener:
   timeout_s: 30
   max_retries: 3
 agent:
-  # Claude Agent SDK -> SharedLLM Anthropic-compatible route (same keys as llm:, sharedllm_byok)
-  base_url: https://api.sharedllm.com/ollama
-  model: gpt-oss:120b
+  # Claude Agent SDK -> SharedLLM Anthropic-compatible route on the same provider/model as llm: (virtual key only)
+  base_url: https://api.sharedllm.com/anthropic     # spec 4.3: Anthropic-compatible route; gateway translates
+  model: "~z-ai/glm-flash-latest"
   max_turns: 30
   max_revisions: 2
   sessions_dir: sessions          # under out_dir; persisted research-session memory

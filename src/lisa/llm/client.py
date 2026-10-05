@@ -68,7 +68,8 @@ class LLMClient:
         if not offline and self._missing is None:
             self._http = httpx.Client(
                 base_url=settings.base_url.rstrip("/") + "/", timeout=settings.timeout_s, transport=transport,
-                headers=_auth_headers(settings))
+                # SharedLLM pads replies with leading whitespace, which corrupts gzip decoding: ask for plain bodies
+                headers={**_auth_headers(settings), "Accept-Encoding": "identity"})
 
     def _params(self) -> dict:
         p = {"model": self.settings.model, "temperature": self.settings.temperature,

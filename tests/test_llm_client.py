@@ -143,3 +143,12 @@ def test_sharedllm_byok_requires_provider_key(tmp_path):
     c, _, _, _ = make(tmp_path, [], auth="sharedllm_byok", provider_key=None, provider_key_env="OLLAMA_API_KEY")
     with pytest.raises(LLMError, match="OLLAMA_API_KEY is not set"):
         c.complete(MSG, "v1")
+
+
+def test_sharedllm_sends_only_virtual_key_and_asks_for_uncompressed_replies(tmp_path):
+    # the gateway pads replies with leading whitespace, which breaks gzip decoding (DecodingError, 2026-10-05)
+    c, _, seen, _ = make(tmp_path, [(200, chat_payload("x"), {})], auth="sharedllm")
+    c.complete(MSG, "v1")
+    assert seen[0].headers["X-SharedLLM-Key"] == "k-test"
+    assert "Authorization" not in seen[0].headers
+    assert seen[0].headers["Accept-Encoding"] == "identity"

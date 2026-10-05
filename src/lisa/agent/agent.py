@@ -15,7 +15,8 @@ from lisa.agent.mcp_http import MCPCallError, call_tool
 from lisa.agent.memory.store import SessionMemory
 from lisa.agent.subagents.citation_chaser import citation_chaser
 from lisa.common.auth import issue_token
-from lisa.common.config import (load_agent_settings, load_auth_settings, load_serve_settings, load_settings)
+from lisa.common.config import (AgentSettings, load_agent_settings, load_auth_settings, load_serve_settings,
+                               load_settings)
 from lisa.common.tracing import setup_tracing, span
 
 AGENT_DIR = Path(__file__).resolve().parent          # holds .claude/skills/legal-research/SKILL.md
@@ -78,6 +79,24 @@ class TurnResult:
     gate_calls: int = 0
 
 
+def sdk_env(agent: AgentSettings) -> dict:
+    """Claude Agent SDK environment for the SharedLLM Anthropic-compatible route.
+
+    Standard path: only the virtual key (X-SharedLLM-Key); with no provider Authorization the gateway serves the
+    request from your contributed keys, then the pool. With a provider key set (BYOK), it is forwarded as the bearer.
+    """
+    if not agent.gateway_key:
+        raise RuntimeError("SHAREDLLM_API_KEY must be set (see .env.example)")
+    m = agent.model
+    auth = ({"ANTHROPIC_AUTH_TOKEN": agent.provider_key, "ANTHROPIC_API_KEY": ""} if agent.provider_key
+            else {"ANTHROPIC_API_KEY": agent.gateway_key})
+    return {"ANTHROPIC_BASE_URL": agent.base_url, **auth,
+            "ANTHROPIC_CUSTOM_HEADERS": f"X-SharedLLM-Key: {agent.gateway_key}",
+            "ANTHROPIC_MODEL": m, "ANTHROPIC_DEFAULT_HAIKU_MODEL": m, "ANTHROPIC_DEFAULT_SONNET_MODEL": m,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": m, "CLAUDE_CODE_SUBAGENT_MODEL": m,
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1", "CLAUDECODE": ""}
+
+
 class ResearchAgent:
     def __init__(self, role: str = "researcher", subject: str = "lisa-agent"):
         self.settings = load_settings()
@@ -92,14 +111,7 @@ class ResearchAgent:
 
     # ---------- SDK wiring ----------
     def _env(self) -> dict:
-        if not self.agent.gateway_key or not self.agent.provider_key:
-            raise RuntimeError("SHAREDLLM_API_KEY and OLLAMA_API_KEY must be set (see .env.example)")
-        m = self.agent.model
-        return {"ANTHROPIC_BASE_URL": self.agent.base_url, "ANTHROPIC_AUTH_TOKEN": self.agent.provider_key,
-                "ANTHROPIC_API_KEY": "", "ANTHROPIC_CUSTOM_HEADERS": f"X-SharedLLM-Key: {self.agent.gateway_key}",
-                "ANTHROPIC_MODEL": m, "ANTHROPIC_DEFAULT_HAIKU_MODEL": m, "ANTHROPIC_DEFAULT_SONNET_MODEL": m,
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": m, "CLAUDE_CODE_SUBAGENT_MODEL": m,
-                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1", "CLAUDECODE": ""}
+        return sdk_env(self.agent)
 
     def _options(self, traj: Trajectory, resume: str | None):
         from claude_agent_sdk import ClaudeAgentOptions, HookMatcher

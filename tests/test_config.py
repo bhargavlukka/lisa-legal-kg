@@ -64,7 +64,7 @@ def test_repo_llm_settings_have_model_and_fewshot(monkeypatch):
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
     monkeypatch.delenv("SHAREDLLM_API_KEY", raising=False)
     s = load_llm_settings(env_file=None)
-    assert s.model == "gpt-oss:120b" and s.auth == "sharedllm_byok" and s.api_key is None
+    assert s.model == "~z-ai/glm-flash-latest" and s.auth == "sharedllm" and s.api_key is None
     assert s.base_url.startswith("https://api.sharedllm.com/")
     assert load_eval_settings().fewshot_units == ("eoir_4018__u1of1", "scotus_2017_17-269__u1of1")
 
