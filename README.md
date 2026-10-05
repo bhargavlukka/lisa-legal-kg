@@ -1,63 +1,104 @@
 # LISA — Legal Knowledge-Graph Research Agent
 
-Self-hosted legal research over two U.S. case-law corpora (30 BIA/AG immigration decisions, 30 Supreme Court
-opinions): a knowledge graph exposed as MCP tools, driven by an LLM agent, with mechanically verified citations.
+**Problem.** An immigration litigation team needs research answers it can trust: which decisions cite a precedent,
+how BIA decisions rely on Supreme Court holdings, which statutes dominate a corpus. LLM answers over case law
+fabricate citations and quotes. LISA answers from a knowledge graph of two corpora (30 BIA / Attorney General
+decisions, 30 U.S. Supreme Court opinions) plus CourtListener, through an agent whose every citation is checked by
+a deterministic verifier: quotes must exist on the stored page, cases must exist, uncited legal claims are blocked.
+An answer that cannot pass is salvaged to its verified parts or refused.
 
-> Status: **Phase 1 — graph foundation** (deterministic extraction tier + Neo4j). Later phases: LLM extraction &
-> gold-standard eval, four MCP servers, agent, evaluation, security/ops.
+## Where things are
+
+| deliverable | location |
+|---|---|
+| Architecture (+ diagram) | [docs/architecture.md](docs/architecture.md), [diagrams/architecture.mmd](diagrams/architecture.mmd) |
+| Decision log (each choice vs alternatives) | [docs/decision_log.md](docs/decision_log.md) |
+| Threat model | [docs/threat_model.md](docs/threat_model.md) |
+| Model-constraints memo | [docs/model_constraints.md](docs/model_constraints.md) |
+| Evaluation report (RAG vs KG, extraction P/R, failures) | [docs/evaluation_report.md](docs/evaluation_report.md), raw: [docs/eval/](docs/eval/) |
+| Golden question set (28) | [config/eval/golden_questions.yaml](config/eval/golden_questions.yaml) |
+| Graph build / LLM extraction | `src/lisa/graph`, `src/lisa/extract` |
+| MCP servers | `src/lisa/servers` (graph, citation_verifier, analytics_server, external_law_server) |
+| Agent: skill, subagent, memory, guardrails | `src/lisa/agent` (`.claude/skills/legal-research`, `subagents/`, `memory/`, `guardrails/`) |
+| Evaluation code | `src/lisa/eval` (extraction_eval, qa, rag, qa_cli) |
+| Config (domains, datasets, model, limits) | `config/` |
+| Data checksums + rebuild | `data_manifest/manifest.json`, `scripts/rebuild.sh`, `scripts/rebuild.ps1` |
+| Compose / images | `docker-compose.yml`, `Dockerfile` |
+
+## Architecture in one paragraph
+
+A deterministic tier builds Case / Authority / Statute / Page nodes and CITES / MENTIONS_STATUTE edges from detected
+citations; an LLM tier (`gpt-oss:120b` through the SharedLLM gateway) adds doctrines, judges and FOLLOWS /
+DISTINGUISHES / OVERRULES, each kept only if its supporting quote is found on the page. Both tiers carry
+provenance and confidence and are stored separately, loaded into Neo4j or served from memory. Four MCP servers
+(graph, citation-verifier, analytics, external-law/CourtListener) expose the graph over HTTP with signed JWTs and
+researcher/admin roles. A Claude Agent SDK agent with a legal-research skill, a citation-chaser subagent and
+persistent session memory calls those tools; a code gate runs the verifier on every draft before delivery.
+OpenTelemetry traces go to Jaeger. Details: [docs/architecture.md](docs/architecture.md).
 
 ## Setup
+
+Requirements: Python 3.12, the `LISA_Project_Package` (case data is **not** in this repo), a SharedLLM key plus an
+Ollama Cloud key (see [model_constraints.md](docs/model_constraints.md)), optionally a CourtListener token, Docker for
+the compose stack.
+
 ```bash
 py -3 -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"
-cp .env.example .env        # set LISA_DATA_DIR to LISA_Project_Package/data and NEO4J_PASSWORD
-docker compose --env-file .env up -d neo4j
+.venv/Scripts/python -m pip install -e ".[dev,agent,rag]"     # Linux/macOS: .venv/bin/python
+cp .env.example .env     # set LISA_DATA_DIR, NEO4J_PASSWORD, SHAREDLLM_API_KEY, OLLAMA_API_KEY, LISA_AUTH_SECRET,
+                         # COURTLISTENER_TOKEN (optional)
+.venv/Scripts/python -m pytest                                 # ~240 tests, no network
 ```
-The case data is **not** in this repo. Every input file is verified against the package's `manifest.json` SHA-256 before use.
 
 ## Build the graph
-```bash
-.venv/Scripts/python scripts/build_graph.py --dataset all --check   # both corpora + cross-domain edges
-.venv/Scripts/python scripts/build_graph.py --dataset immigration   # one domain — same code, different YAML
-.venv/Scripts/python -m pytest
-```
-`--check` asserts every edge in `selection_report.json` (27 immigration-internal, 61 SCOTUS-internal,
-50 cross-domain entries) is present. Output: `out/graph_<dataset>.json`; Neo4j browser at http://localhost:7474.
-Without a reachable Neo4j the JSON is still written and the command exits with code 3; use `--no-load` to skip loading.
-
-Current result on the provided packs: 60 cases, 138/138 expected edges found, 0 extra, 0 unverified edges.
-
-## Graph schema (deterministic tier)
-Nodes: `Case`, `Authority` (out-of-corpus citation), `Statute`, `Regulation`, `Page`.
-Edges: `CITES` (`scope`: internal / cross_domain / external; `bases`: detected_citation / name / reporter),
-`MENTIONS_STATUTE`, `HAS_PAGE`. Every node and edge has `provenance`, `confidence`, and page-anchored `evidence`.
-Case legal status is always `not verified`. Cases without a U.S. Reports citation yet (recent slip opinions) get
-`canon_cite = nocite:<id>`.
-
-## Domains are configuration
-`config/domains/*.yaml` maps record fields and statute patterns; `config/datasets/*.yaml` picks files and cross-domain
-rules. Adding or switching a corpus requires no code changes.
-
-## Phase 2 — LLM extraction tier and gold evaluation
-
-Needs an LLM key in `.env` (see `.env.example`). Endpoint, auth style, model and limits live in
-`config/settings.yaml` → `llm:` (currently `gpt-oss:120b` on Ollama Cloud with `OLLAMA_API_KEY`; the SharedLLM
-gateway is a config switch — see `docs/decision_log.md`).
 
 ```bash
-.venv/Scripts/python scripts/extract_llm.py --dataset gold_eval          # exit 3 = budget reached; rerun to resume
-.venv/Scripts/python scripts/eval_extraction.py                           # -> out/eval/extraction_report.md
-.venv/Scripts/python scripts/extract_llm.py --dataset immigration         # then litigation
-.venv/Scripts/python scripts/extract_llm.py --dataset gold_eval --offline # replay from cache, no API calls
+scripts/rebuild.sh            # or scripts/rebuild.ps1 - verifies checksums, builds every graph, replays LLM tier
+scripts/rebuild.sh --live     # allow model calls for anything not in out/llm_cache
 ```
 
-Outputs: `out/llm_<ds>.json` (gold schema per unit, `llm`/`unverified` provenance by quote verification),
-`out/graph_<ds>_llm.json` (FOLLOWS / DISTINGUISHES / OVERRULES / CITES_LLM / AUTHORED_BY / INVOKES_DOCTRINE,
-joined to Phase 1 node ids), `out/llm_runs/*.json` (requests, tokens, 429s, failures per run).
-The deterministic tier (`out/graph_<ds>.json`) is not changed by Phase 2. Results: `docs/eval/extraction_report.md`.
+Step by step: `scripts/build_graph.py --dataset all --check` (deterministic tier; `--check` asserts all 138 edges of
+`selection_report.json`), `scripts/extract_llm.py --dataset gold_eval` (LLM tier on the gold units),
+`scripts/enrich_llm.py` (LLM tier on the 60 served cases), `scripts/load_neo4j.py`. Switching corpus is config only:
+`--dataset immigration` / `litigation` uses `config/datasets/*.yaml` and `config/domains/*.yaml`.
 
-## Docs
-- Design: `docs/design/phase1-graph-foundation.md`
-- Plan: `docs/plans/phase1-graph-foundation.md`
-- Phase 2 design / plan: `docs/design/phase2-llm-extraction.md`, `docs/plans/phase2-llm-extraction.md`
-- Decisions: `docs/decision_log.md`; extraction results: `docs/eval/extraction_report.md`
+## Run
+
+Local processes (no Docker needed):
+
+```bash
+.venv/Scripts/python scripts/serve_all.py                                   # 4 servers on 127.0.0.1:8101-8104
+.venv/Scripts/python scripts/ask.py "Which BIA decisions rely on Pereida v. Wilkinson?"
+.venv/Scripts/python scripts/ask.py --session matter-42                     # interactive; memory survives restarts
+.venv/Scripts/python scripts/issue_token.py me admin                        # token for direct MCP access
+```
+
+Full stack with Docker:
+
+```bash
+docker compose --env-file .env up -d --build                                # neo4j, jaeger, 4 servers
+docker compose --env-file .env run --rm agent "Which immigration decisions cite Pereira v. Sessions?"
+```
+
+Traces: Jaeger UI at http://localhost:16686 (set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` when running
+locally); every service also writes `out/traces/<service>.jsonl`. Neo4j browser: http://localhost:7474.
+
+## Reproduce the evaluation
+
+```bash
+.venv/Scripts/python scripts/eval_extraction.py                   # extraction P/R vs gold -> out/eval/extraction_report.md
+.venv/Scripts/python scripts/eval_qa.py --system rag              # RAG baseline on the golden set
+.venv/Scripts/python scripts/eval_qa.py --system kg               # KG agent (servers must be running)
+COURTLISTENER_TOKEN= .venv/Scripts/python scripts/serve_all.py    # restart servers without the token, then:
+.venv/Scripts/python scripts/eval_qa.py --system kg --tag no_token --ids q24,q25    # degradation run
+.venv/Scripts/python scripts/eval_qa.py --report-only             # -> out/eval/qa_report.md, qa_summary.json
+```
+
+All LLM responses are cached in `out/llm_cache`, so extraction and RAG reruns cost no model calls; QA runs append to
+`out/eval/qa_<system>.jsonl` and skip questions already answered (`--redo` to rerun).
+
+## Security notes
+
+Secrets only via environment (`.env` is git-ignored); compose binds every port to 127.0.0.1 and gives the LLM keys
+only to the agent. Case text reaches the model inside untrusted-text fences, and the verifier gate - not the prompt -
+decides what is delivered. See [docs/threat_model.md](docs/threat_model.md).
