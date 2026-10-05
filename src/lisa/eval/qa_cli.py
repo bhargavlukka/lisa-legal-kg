@@ -56,6 +56,10 @@ def run_kg(questions: list[dict], path: Path) -> int:
         return 2
     for q in questions:
         r = anyio.run(agent.ask, q["question"], None)
+        if r.status == "error" or (r.trajectory.input_tokens == 0 and r.trajectory.output_tokens == 0):
+            # the model path never answered (quota, 429, outage): not a result - stop so a rerun resumes here
+            print(f"{q['id']}: model unavailable, not recorded - stopping (rerun to resume)\n{r.text[-300:]}", flush=True)
+            return 3
         rec = {"id": q["id"], "system": "kg", "status": r.status, "text": r.text, "draft": r.draft,
                "report": r.report, "latency_s": round(r.latency_s, 2), "input_tokens": r.trajectory.input_tokens,
                "output_tokens": r.trajectory.output_tokens, "model_calls": r.trajectory.model_calls,
