@@ -157,8 +157,7 @@ class ResearchAgent:
         path = self.settings.out_dir / "trajectories.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "
-")
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     # ---------- one research turn ----------
     async def ask(self, question: str, memory: SessionMemory | None = None) -> TurnResult:
