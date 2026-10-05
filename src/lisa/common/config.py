@@ -191,3 +191,24 @@ def load_courtlistener_settings(config_dir: Path = CONFIG_DIR,
         per_minute=int(lim.get("per_minute", 5)), per_hour=int(lim.get("per_hour", 50)),
         per_day=int(lim.get("per_day", 125)), timeout_s=float(s.get("timeout_s", 30)),
         max_retries=int(s.get("max_retries", 3)))
+
+
+@dataclass(frozen=True)
+class AgentSettings:
+    base_url: str
+    model: str
+    gateway_key: str | None
+    provider_key: str | None
+    max_turns: int
+    max_revisions: int
+    sessions_dir: str
+
+
+def load_agent_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> AgentSettings:
+    llm = load_llm_settings(config_dir, env_file)
+    s = _yaml(config_dir / "settings.yaml").get("agent") or {}
+    return AgentSettings(base_url=s.get("base_url", "https://api.sharedllm.com/ollama"),
+                         model=os.environ.get("LISA_AGENT_MODEL") or s.get("model", llm.model),
+                         gateway_key=llm.api_key, provider_key=llm.provider_key,
+                         max_turns=int(s.get("max_turns", 30)), max_revisions=int(s.get("max_revisions", 2)),
+                         sessions_dir=s.get("sessions_dir", "sessions"))

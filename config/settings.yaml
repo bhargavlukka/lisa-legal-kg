@@ -39,3 +39,10 @@ courtlistener:
   limits: {per_minute: 5, per_hour: 50, per_day: 125}
   timeout_s: 30
   max_retries: 3
+agent:
+  # Claude Agent SDK -> SharedLLM Anthropic-compatible route (same keys as llm:, sharedllm_byok)
+  base_url: https://api.sharedllm.com/ollama
+  model: gpt-oss:120b
+  max_turns: 30
+  max_revisions: 2
+  sessions_dir: sessions          # under out_dir; persisted research-session memory
