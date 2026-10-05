@@ -18,7 +18,8 @@ CMD ["sh", "-c", "python -m ${LISA_SERVER:?set LISA_SERVER}"]
 
 FROM server AS agent
 USER root
-ARG CLAUDE_CODE_VERSION=latest
+# pinned: the Agent SDK is tested against this CLI version
+ARG CLAUDE_CODE_VERSION=2.1.289
 RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
     && npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
     && apt-get purge -y npm && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \

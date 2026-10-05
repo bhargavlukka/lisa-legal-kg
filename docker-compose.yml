@@ -9,8 +9,12 @@ x-server: &server
   build: {context: ., target: server}
   image: lisa-server
   restart: unless-stopped
-  env_file: .env
+  # Servers get only the secrets they use; LLM keys in .env go to the agent alone.
   environment: &server-env
+    LISA_AUTH_SECRET: ${LISA_AUTH_SECRET:?set LISA_AUTH_SECRET in .env}
+    COURTLISTENER_TOKEN: ${COURTLISTENER_TOKEN:-}
+    NEO4J_USER: ${NEO4J_USER:-neo4j}
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
     LISA_HOST: 0.0.0.0
     LISA_DATA_DIR: /data
     LISA_OUT_DIR: /app/out
@@ -27,8 +31,8 @@ services:
   neo4j:
     image: neo4j:5-community
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
     volumes:
@@ -43,31 +47,34 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"   # UI
-      - "4318:4318"     # OTLP/HTTP
+      - "127.0.0.1:16686:16686"   # UI
+      - "127.0.0.1:4318:4318"     # OTLP/HTTP
 
   graph:
     <<: *server
     environment: {<<: *server-env, LISA_SERVER: lisa.servers.graph_server}
-    ports: ["8101:8101"]
+    ports: ["127.0.0.1:8101:8101"]
 
   verifier:
     <<: *server
     environment: {<<: *server-env, LISA_SERVER: lisa.servers.citation_verifier}
-    ports: ["8102:8102"]
+    ports: ["127.0.0.1:8102:8102"]
 
   analytics:
     <<: *server
     environment: {<<: *server-env, LISA_SERVER: lisa.servers.analytics_server}
-    ports: ["8103:8103"]
+    ports: ["127.0.0.1:8103:8103"]
 
   external:
     <<: *server
     environment: {<<: *server-env, LISA_SERVER: lisa.servers.external_law_server}
-    ports: ["8104:8104"]
+    ports: ["127.0.0.1:8104:8104"]
 
   agent:
-    build: {context: ., target: agent}
+    build:
+      context: .
+      target: agent
+      args: {CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.289}"}
     image: lisa-agent
     profiles: [agent]          # run on demand: docker compose run --rm agent "<question>"
     env_file: .env
