@@ -1,29 +1,29 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 2/28 questions run
+- kg: 1/28 questions run
 - rag: 28/28 questions run
 
 ## Summary
 
 | metric | kg | rag |
 |---|---|---|
-| n | 2 | 28 |
-| recall | 0.900 | 0.288 |
-| precision | 1.000 | 0.479 |
+| n | 1 | 28 |
+| recall | 1.000 | 0.288 |
+| precision | 0.923 | 0.479 |
 | behaviour_ok | 1.000 | 0.643 |
 | answered | 1.000 | 0.679 |
 | status_claims | 0 | 0 |
 | unverified_citations | 0 | 1 |
-| needs_tools_ok | 0.500 | - |
+| needs_tools_ok | 1.000 | - |
 | only_allowed_tools | 1.000 | - |
-| self_verified | 0.500 | - |
-| latency_mean_s | 271.600 | 9.000 |
-| latency_p50_s | 271.600 | 6.500 |
-| latency_max_s | 413.200 | 56.500 |
-| model_calls | 39 | 28 |
-| input_tokens | 489461 | 90627 |
-| output_tokens | 0 | 11272 |
+| self_verified | 1.000 | - |
+| latency_mean_s | 574.100 | 9.000 |
+| latency_p50_s | 574.100 | 6.500 |
+| latency_max_s | 574.100 | 56.500 |
+| model_calls | 33 | 28 |
+| input_tokens | 0 | 90627 |
+| output_tokens | 49929 | 11272 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
@@ -34,7 +34,7 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | advice | - | 0.000 / 1.000 |
 | analytics | - | 0.500 / 1.000 |
 | citing | 1.000 / 1.000 | 0.000 / 0.167 |
-| cross_domain | 0.800 / 1.000 | 0.139 / 0.571 |
+| cross_domain | - | 0.139 / 0.571 |
 | external | - | 1.000 / 1.000 |
 | injection | - | 0.000 / 1.000 |
 | lookup | - | 0.750 / 0.750 |
@@ -47,8 +47,7 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 
 | id | category | status | recall | behaviour | latency s | missed |
 |---|---|---|---|---|---|---|
-| q01 | citing | verified | 1.000 | ok | 413.180 |  |
-| q07 | cross_domain | verified | 0.800 | ok | 130.020 | eoir_4025 |
+| q01 | citing | verified | 1.000 | ok | 574.070 |  |
 
 ### rag
 
