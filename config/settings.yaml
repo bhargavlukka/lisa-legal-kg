@@ -11,7 +11,8 @@ llm:
   api_key_env: SHAREDLLM_API_KEY
   model: "~z-ai/glm-flash-latest"
   temperature: 0
-  max_output_tokens: 16384   # gpt-oss spends output tokens on hidden reasoning
+  max_output_tokens: 16384   # reasoning models spend output tokens on hidden reasoning
+  reasoning: {max_tokens: 4096}   # glm-flash otherwise reasons until the cap (finish_reason length, empty answer)
   timeout_s: 180
   max_requests_per_run: 300
   workers: 3                 # parallel requests; SharedLLM/Ollama returns 429 "too many concurrent requests" at 2x6

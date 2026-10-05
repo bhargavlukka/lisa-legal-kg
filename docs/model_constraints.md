@@ -4,20 +4,23 @@
 
 | use | endpoint | model | how it is called |
 |---|---|---|---|
-| LLM extraction tier, enrichment, RAG baseline | `https://api.sharedllm.com/ollama/v1` (OpenAI-compatible) | `gpt-oss:120b` | `src/lisa/llm/client.py`, temperature 0, JSON mode |
-| Research agent | `https://api.sharedllm.com/ollama` (Anthropic-compatible) | `gpt-oss:120b` | Claude Agent SDK with `ANTHROPIC_BASE_URL` (`src/lisa/agent/agent.py`) |
+| RAG baseline, LLM calls from now on | `https://api.sharedllm.com/custom-openai/v1` (OpenAI-compatible) | `~z-ai/glm-flash-latest` | `src/lisa/llm/client.py`, temperature 0, JSON mode |
+| Research agent | `https://api.sharedllm.com/anthropic` (Anthropic-compatible, spec 4.3) | `~z-ai/glm-flash-latest` | Claude Agent SDK with `ANTHROPIC_BASE_URL` (`src/lisa/agent/agent.py`, `sdk_env`) |
+| Extraction tier + enrichment (already run, cached) | `https://api.sharedllm.com/ollama/v1` (BYOK) | `gpt-oss:120b` | same client; results in `docs/eval/extraction_report.md` |
 
-The model is the spec's standard path, the SharedLLM gateway, used in **bring-your-own-key** mode: the request carries the
-gateway key (`X-SharedLLM-Key: $SHAREDLLM_API_KEY`) plus our Ollama Cloud key as the provider bearer
-(`$OLLAMA_API_KEY`), which the gateway forwards upstream. Why not the default (`z-ai/glm-flash-latest` on pooled keys):
-the pooled upstream keys returned 401/402 and glm-flash was not served on any route (decision log, 2026-10-01 and
-2026-10-05). Model identity lives only in `config/settings.yaml` (`llm.model`, `agent.model`); switching model or
+The model path is the spec's standard path exactly: the SharedLLM gateway, authenticated **only** with the virtual
+key (`X-SharedLLM-Key: $SHAREDLLM_API_KEY`), serving `z-ai/glm-flash-latest` from the shared pool (billed to the
+account balance). The gateway exposes that model under its Custom provider as `~z-ai/glm-flash-latest` (the id the
+dashboard Playground exports); without the `~` the gateway routed to the account's own contributed keys, which the
+upstream rejected (401), which is why the extraction tier earlier ran in bring-your-own-key mode on `gpt-oss:120b`
+(decision log). Model identity lives only in `config/settings.yaml` (`llm.model`, `agent.model`); switching model or
 endpoint is a config change, and the LLM cache key includes the model, so results from different models never mix.
 
 ## Limits we engineer against
 
 | limit | source | value / observation |
 |---|---|---|
+| Response encoding | SharedLLM | replies are padded with leading whitespace, which corrupts gzip decoding -> client sends `Accept-Encoding: identity` |
 | Concurrent requests | gateway / Ollama Cloud | 12 in flight (2 runs x 6 workers) -> HTTP 429 "too many concurrent requests"; 3 workers per run is stable |
 | Daily request cap, per-minute tokens | SharedLLM tiered caps (spec §6) | budgeted per run, see below |
 | Output length | gpt-oss spends output tokens on hidden reasoning | `max_output_tokens: 16384`; a truncated reply (`finish_reason: length`) is recorded as a failed window, not parsed |

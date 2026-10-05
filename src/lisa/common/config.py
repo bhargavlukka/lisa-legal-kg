@@ -95,6 +95,7 @@ class LLMSettings:
     provider_key: str | None = None
     provider_key_env: str | None = None
     workers: int = 1                         # parallel LLM requests per run
+    reasoning: dict | None = None            # provider reasoning control, e.g. {max_tokens: 2048}; sent as-is
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,7 @@ def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REP
         provider_key=os.environ.get(s["provider_key_env"]) or None if s.get("provider_key_env") else None,
         provider_key_env=s.get("provider_key_env"),
         workers=max(1, int(s.get("workers", 1))),
+        reasoning=s.get("reasoning") or None,
     )
 
 

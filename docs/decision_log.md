@@ -118,3 +118,15 @@ node + the claude CLI). Data and built graphs are bind-mounted, never baked in. 
 jaeger, the four servers, and the agent on demand (`--profile agent` / `docker compose run`).
 Consequences: images contain no case data or secrets. Compose validated with `docker compose config`; not run live
 on the dev laptop (no Docker engine).
+
+## 2026-10-05 — Model path back to the spec default: `~z-ai/glm-flash-latest` from the SharedLLM pool
+Context: the BYOK path (own Ollama Cloud key through the gateway) hit the Ollama free-tier usage limit (429) during
+the QA runs. Diagnosis: with only `X-SharedLLM-Key`, the response header `x-sharedllm-key-source: user` showed the
+gateway serving from the account's own contributed keys (all rejected upstream, 401) because the model ids we sent
+(`z-ai/glm-flash-latest`, `glm-5.3-flash`, ...) did not match a pool model. The dashboard Playground export showed the
+pool id `~z-ai/glm-flash-latest` on `/custom-openai`; with it every route (`/custom-openai`, `/anthropic`,
+`/custom-anthropic`) returns 200 with `key-source: pool`.
+Decision: LLM client on `/custom-openai/v1`, agent on `/anthropic` (spec 4.3), model `~z-ai/glm-flash-latest`, auth
+virtual key only (`llm.auth: sharedllm`); the BYOK mode stays available in code but is not configured.
+Consequences: QA evaluation (KG agent and RAG) runs on the spec model, billed to the SharedLLM balance; the Phase 2
+extraction evaluation stays on `gpt-oss:120b` (cached; rerunning it on glm is a config change plus ~350 calls).

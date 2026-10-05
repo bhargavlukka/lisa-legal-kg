@@ -76,6 +76,8 @@ class LLMClient:
              "max_tokens": self.settings.max_output_tokens}
         if self.settings.json_mode:
             p["response_format"] = {"type": "json_object"}
+        if self.settings.reasoning:
+            p["reasoning"] = dict(self.settings.reasoning)
         return p
 
     def complete(self, messages: list[dict], prompt_version: str) -> Completion:

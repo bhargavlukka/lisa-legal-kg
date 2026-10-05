@@ -152,3 +152,14 @@ def test_sharedllm_sends_only_virtual_key_and_asks_for_uncompressed_replies(tmp_
     assert seen[0].headers["X-SharedLLM-Key"] == "k-test"
     assert "Authorization" not in seen[0].headers
     assert seen[0].headers["Accept-Encoding"] == "identity"
+
+
+def test_reasoning_cap_is_sent_and_part_of_the_cache_key(tmp_path):
+    # glm-flash otherwise spends the whole output budget on hidden reasoning (finish_reason length, empty content)
+    c, _, seen, _ = make(tmp_path, [(200, chat_payload("x"), {})], reasoning={"max_tokens": 2048})
+    c.complete(MSG, "v1")
+    assert json.loads(seen[0].content)["reasoning"] == {"max_tokens": 2048}
+    assert c._params()["reasoning"] == {"max_tokens": 2048}
+    plain, _, seen2, _ = make(tmp_path / "p", [(200, chat_payload("x"), {})])
+    plain.complete(MSG, "v1")
+    assert "reasoning" not in json.loads(seen2[0].content)
