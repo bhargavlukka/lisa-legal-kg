@@ -31,6 +31,8 @@ jobs:
             echo "NEO4J_PASSWORD=$(python -c 'import secrets;print(secrets.token_hex(12))')"
             echo "LISA_AUTH_SECRET=$(python -c 'import secrets;print(secrets.token_hex(32))')"
             echo "SHAREDLLM_API_KEY=sk-sharedllm-ci-dummy"
+            echo "LISA_UID=$(id -u)"
+            echo "LISA_GID=$(id -g)"
           } > .env
           set -a; . ./.env; set +a
           python scripts/build_graph.py --dataset all --check --no-load

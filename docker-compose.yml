@@ -9,6 +9,9 @@ x-server: &server
   build: {context: ., target: server}
   image: lisa-server
   restart: unless-stopped
+  # ./out is a bind mount: run as the host user so the servers can write caches and traces there
+  # (Linux: put LISA_UID=$(id -u) and LISA_GID=$(id -g) in .env; Docker Desktop works with the defaults)
+  user: "${LISA_UID:-10001}:${LISA_GID:-10001}"
   # Each service gets only the secrets it uses: every server verifies tokens (LISA_AUTH_SECRET); graph-backed
   # servers get the Neo4j login; only verifier + external get the CourtListener token; the LLM key goes to the agent.
   environment: &server-env
@@ -80,11 +83,13 @@ services:
       target: agent
       args: {CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.289}"}
     image: lisa-agent
+    user: "${LISA_UID:-10001}:${LISA_GID:-10001}"
     profiles: [agent]          # run on demand: docker compose run --rm agent "<question>"
     # No signing secret here: the agent uses a pre-issued researcher token (scripts/issue_token.py lisa-agent), so it
     # cannot mint admin tokens. Only the SharedLLM key and that token are passed.
     environment:
       SHAREDLLM_API_KEY: ${SHAREDLLM_API_KEY:?set SHAREDLLM_API_KEY in .env}
+      HOME: /tmp                 # the claude CLI keeps its state under $HOME; any UID can write /tmp
       LISA_AGENT_TOKEN: ${LISA_AGENT_TOKEN:?set LISA_AGENT_TOKEN in .env (python scripts/issue_token.py lisa-agent)}
       LISA_DATA_DIR: /data
       LISA_OUT_DIR: /app/out
