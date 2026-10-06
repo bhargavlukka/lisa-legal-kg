@@ -232,3 +232,14 @@ def test_nested_quotation_marks_pair_correctly(v):
            'and the Board again said "(2018), the notice was defective" [1].')
     r = v.verify_answer(ans, CIT)
     assert "unverified_quote" not in {p["kind"] for p in r["problems"]}, r["problems"]
+
+
+def test_alteration_path_keeps_ellipsis_order_and_gap_limit(graph_all):
+    store = MemoryStore([graph_all])
+    store.pages["eoir_1"][2] += ("\nAsylum is granted to the other applicant. " + "Unrelated filler sentence. " * 40
+                                 + "The Board has jurisdiction over this appeal.")
+    v = Verifier(store)
+    for q in ["[t]he Board has jurisdiction . . . Asylum is granted to the other applicant",       # far apart
+              "[a]sylum is granted to the other applicant . . . The Board has jurisdiction"]:     # also far apart
+        r = v.verify_answer(f'The Board said "{q}" [1].', CIT)
+        assert "unverified_quote" in {p["kind"] for p in r["problems"]}, q

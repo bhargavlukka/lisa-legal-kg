@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from lisa.extract.verify import _ELLIPSIS, MIN_QUOTE, PageIndex, squash
+from lisa.extract.verify import _ELLIPSIS, MAX_PIECES, MIN_QUOTE, PageIndex, squash
 from lisa.graph.canon import canon
 from lisa.store.memory import STATUS
 
@@ -147,15 +147,20 @@ class Verifier:
         literal = len(squash(quote)) >= MIN_QUOTE and any(self.check_quote(c, quote)["quote_match"] for c in cids)
         if literal or not ALTERATION.search(quote):      # brackets can be in the source itself ("say[ing]")
             return literal
-        # each ellipsis-separated segment must match contiguously on one page, an alteration standing for at most
-        # 4 letters - never a gap of arbitrary text
+        # one pattern: the ellipsis segments in order, each contiguous (an alteration is a case change of the same
+        # letters), separated by at most MAX_ELLIPSIS_GAP characters - the same limits as the literal path. Matched
+        # per page and across each pair of adjacent pages, like PageIndex.locate.
         segs = [seg.strip(" .,;:") for seg in _ELLIPSIS.split(quote)]
         segs = [seg for seg in segs if seg]
-        if sum(len(squash(ALTERATION.sub("", seg))) for seg in segs) < MIN_QUOTE:
+        if not segs or len(segs) > MAX_PIECES or sum(len(squash(ALTERATION.sub("", s))) for s in segs) < MIN_QUOTE:
             return False
-        pats = [re.compile(_alteration_pattern(seg)) for seg in segs]
-        return any(all(pt.search(sq) for pt in pats)
-                   for c in cids for sq in (squash(t) for t in self.store.pages.get(c, {}).values()))
+        pat = re.compile((r".{0,%d}?" % MAX_ELLIPSIS_GAP).join(_alteration_pattern(s) for s in segs), re.S)
+        for c in cids:
+            pages = [squash(t) for _, t in sorted(self.store.pages.get(c, {}).items())]
+            windows = pages + [a + b for a, b in zip(pages, pages[1:])]
+            if any(pat.search(w) for w in windows):
+                return True
+        return False
 
 
 def _alteration_pattern(seg: str) -> str:
