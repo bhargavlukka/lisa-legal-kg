@@ -26,7 +26,8 @@ LEGAL_CUES = re.compile(r"\b(held|holds|holding|ruled|rules|concluded|decided|fo
                         r"I&N|Board|Court|Attorney General|Congress|INA)\b|§", re.I)
 CASE_CITE = re.compile(r"\b\d{1,3}\s+(?:I&N\s*Dec\.|U\.\s?S\.|S\.\s?Ct\.|F\.\s?(?:2d|3d|4th)|F\.\s?Supp\.)\s*\d{1,4}\b")
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
-QUOTED = re.compile(r"[\"“]([^\"“”]+)[\"”]")          # a quotation in the answer prose
+QUOTED = re.compile(r"[\"“«]([^\"“”«»]+)[\"”»]"            # a quotation in the answer prose: double quotes,
+                    r"|(?<!\w)['‘]([^'‘’\n]{12,}?)['’](?!\w)")  # guillemets, or single quotes (not apostrophes)
 QUOTE_MIN_WORDS = 3                                     # one- or two-word quoted spans are terms, not quotations
 # Legal-quotation alterations: a changed or dropped letter group ("[b]ut", "treat[]", "rule[s]"). Anything longer in
 # brackets ("[did not]") is an insertion and stays literal, so it can only match if the source has it verbatim.
@@ -101,14 +102,14 @@ class Verifier:
             if r["tier"] == UNVERIFIED:
                 problems.append({"kind": "unverified_citation", "marker": i, "case": r["case"], "reason": r.get("reason")})
         for s in sentences(answer):
-            if EXEMPT.search(s) or (s.isupper() and len(s.split()) <= 6):     # headings ("SUPREME COURT")
+            if EXEMPT.search(s) or _is_heading(s):
                 continue
             if LEGAL_CUES.search(s) and not MARKER.search(s):
                 problems.append({"kind": "uncited_claim", "sentence": s[:300]})
             for m in CASE_CITE.finditer(s):
                 if not MARKER.search(s):
                     problems.append({"kind": "uncited_case_reference", "cite": m.group(0)})
-            for q in QUOTED.findall(s):
+            for q in (a or b for a, b in QUOTED.findall(s)):
                 if len(q.split()) < QUOTE_MIN_WORDS or CASE_CITE.fullmatch(q.strip(" ,.;")):
                     continue                                # a quoted term ("Chevron deference") or a bare citation
                 if not self._quote_on_cited_page(q, s, results):
@@ -130,17 +131,35 @@ class Verifier:
             return literal
         # each ellipsis-separated segment must match contiguously on one page, an alteration standing for at most
         # 4 letters - never a gap of arbitrary text
-        segs = []
-        for seg in _ELLIPSIS.split(quote):
-            ps = [squash(p) for p in ALTERATION.split(seg)]
-            ps[0], ps[-1] = ps[0].lstrip(".,;:"), ps[-1].rstrip(".,;:")   # trim only the segment's outer ends
-            if "".join(ps):
-                segs.append(ps)
-        if sum(len(x) for ps in segs for x in ps) < MIN_QUOTE:
+        segs = [seg.strip(" .,;:") for seg in _ELLIPSIS.split(quote)]
+        segs = [seg for seg in segs if seg]
+        if sum(len(squash(ALTERATION.sub("", seg))) for seg in segs) < MIN_QUOTE:
             return False
-        pats = [re.compile(r"[A-Za-z]{0,4}".join(map(re.escape, ps))) for ps in segs]
+        pats = [re.compile(_alteration_pattern(seg)) for seg in segs]
         return any(all(pt.search(sq) for pt in pats)
                    for c in cids for sq in (squash(t) for t in self.store.pages.get(c, {}).values()))
+
+
+def _alteration_pattern(seg: str) -> str:
+    """Regex over squashed page text for one quote segment. "[b]" is a case change (the same letter, either case);
+    "[]" marks letters omitted from the source (0-4). Additive brackets ("[un]", "[s not]") stay literal."""
+    out, pos = [], 0
+    for m in ALTERATION.finditer(seg):
+        out.append(re.escape(squash(seg[pos:m.start()])))
+        inner = m.group(0)[1:-1]
+        out.append("[A-Za-z]{0,4}" if not inner else "".join(f"[{c.lower()}{c.upper()}]" for c in inner))
+        pos = m.end()
+    out.append(re.escape(squash(seg[pos:])))
+    return "".join(out)
+
+
+HOLDING = re.compile(r"(held|holds|holding|ruled|rules|concluded|decided|found|determined|granted|denied|"
+                     r"affirmed|reversed|remanded|overruled|must|requires?|is|are|was|were)", re.I)
+
+
+def _is_heading(s: str) -> bool:
+    """A short all-caps line with no assertion ("SUPREME COURT", "OPINION OF THE COURT") is a heading."""
+    return s.isupper() and len(s.split()) <= 6 and not s.rstrip().endswith(".") and not HOLDING.search(s)
 
 
 def _name_mismatch(cited: str, resolved: str) -> str | None:

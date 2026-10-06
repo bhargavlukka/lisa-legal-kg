@@ -147,3 +147,20 @@ def test_brackets_present_in_the_source_match_literally(graph_all):
     store.pages["eoir_1"][2] += "\nthe basic judicial task of \u201csay[ing] what the law is.\u201d"
     r = Verifier(store).verify_answer('It is the task of "say[ing] what the law is" [1].', CIT)
     assert r["passed"], r["problems"]
+
+
+@pytest.mark.parametrize("prose,kind", [
+    ("The Board said \u201c(2018), the notice wa[s not] defective\u201d [1].", "unverified_quote"),   # insertion
+    ("The Board said \u201cthe notice was [in]defective here\u201d [1].", "unverified_quote"),       # additive letters
+    ("The Board said 'the respondent is plainly eligible for asylum' [1].", "unverified_quote"),   # single quotes
+    ("The Board said \u00abthe respondent is plainly eligible for asylum\u00bb [1].", "unverified_quote"),
+    ("THE BOARD HELD THAT RELIEF IS GRANTED\nThe Board held so [1].", "uncited_claim"),            # all-caps claim
+])
+def test_meaning_changing_alterations_other_quote_marks_and_caps_claims_are_caught(v, prose, kind):
+    r = v.verify_answer(prose, CIT)
+    assert kind in {p["kind"] for p in r["problems"]}, prose
+
+
+def test_case_change_alteration_and_apostrophes_still_pass(v):
+    r = v.verify_answer("The Board\u2019s view: \u201c(2018), [T]he notice was defective\u201d isn't new [1].", CIT)
+    assert r["passed"], r["problems"]
