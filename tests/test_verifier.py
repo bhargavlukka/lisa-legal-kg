@@ -196,3 +196,39 @@ def test_quotation_spanning_a_sentence_break_is_still_checked(v):
 def test_quotation_spanning_a_sentence_break_is_still_checked(v):
     r = v.verify_answer('The Board said "the notice was fine. Relief is granted to all respondents" [1].', CIT)
     assert "unverified_quote" in {p["kind"] for p in r["problems"]}
+
+
+def test_quote_is_checked_against_its_own_marker_only(graph_all):
+    store = MemoryStore([graph_all])
+    other = [c for c in store.pages if c != "eoir_1"][0]
+    store.pages[other][min(store.pages[other])] += "\nWe said that the respondent is plainly eligible for asylum relief here."
+    v = Verifier(store)
+    cits = CIT + [{"case": other, "quote": None}]
+    wrong = v.verify_answer('Per [1], "the respondent is plainly eligible for asylum relief here" [1]; see also [2].', cits)
+    assert "unverified_quote" in {p["kind"] for p in wrong["problems"]}
+    unmarked = v.verify_answer('As noted, "585 U. S. 198 (2018), the notice was defective" here.\nThe Board held so [1].', CIT)
+    assert "unverified_quote" in {p["kind"] for p in unmarked["problems"]}
+
+
+def test_locate_is_bounded_on_pathological_quotes(graph_all):
+    import time
+    store = MemoryStore([graph_all])
+    store.pages["eoir_1"][2] += "\n" + "the " * 20000
+    v = Verifier(store)
+    t = time.perf_counter()
+    v.check_quote("eoir_1", " . . . ".join(["the the the"] * 30) + " . . . zebra crossing quote")
+    assert time.perf_counter() - t < 2.0
+
+
+def test_short_quoted_terms_need_only_appear_in_some_cited_case(v):
+    ok = v.verify_answer('The cases discuss the "notice was defective" rule.\nThe Board held so [1].', CIT)
+    assert "unverified_quote" not in {p["kind"] for p in ok["problems"]}, ok["problems"]
+    bad = v.verify_answer('The cases discuss the "asylum always granted" rule.\nThe Board held so [1].', CIT)
+    assert "unverified_quote" in {p["kind"] for p in bad["problems"]}
+
+
+def test_nested_quotation_marks_pair_correctly(v):
+    ans = ('The Board noted "(2018), the notice was \u201cdefective\u201d" [1]. Later text sits between quotes here, '
+           'and the Board again said "(2018), the notice was defective" [1].')
+    r = v.verify_answer(ans, CIT)
+    assert "unverified_quote" not in {p["kind"] for p in r["problems"]}, r["problems"]

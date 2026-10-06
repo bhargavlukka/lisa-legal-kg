@@ -26,10 +26,12 @@ LEGAL_CUES = re.compile(r"\b(held|holds|holding|ruled|rules|concluded|decided|fo
                         r"I&N|Board|Court|Attorney General|Congress|INA)\b|§", re.I)
 CASE_CITE = re.compile(r"\b\d{1,3}\s+(?:I&N\s*Dec\.|U\.\s?S\.|S\.\s?Ct\.|F\.\s?(?:2d|3d|4th)|F\.\s?Supp\.)\s*\d{1,4}\b")
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
-QUOTED = re.compile(r"[\"“«]([^\"“”«»]+)[\"”»]"            # a quotation in the answer prose: double quotes,
-                    r"|(?<!\w)['‘]([^'‘’\n]{12,}?)['’](?!\w)")  # guillemets, or single quotes (not apostrophes)
+# A quotation in the answer prose. Each quote style pairs only with itself, so an outer "..." may contain an inner
+# “...” (and vice versa); single quotes need word boundaries so apostrophes are not quotes.
+QUOTED = re.compile(r"\"([^\"\n]+)\"|“([^“”\n]+)”|«([^«»\n]+)»|(?<!\w)['‘]([^'‘’\n]{12,}?)['’](?!\w)")
 MAX_ELLIPSIS_GAP = 300                                  # squashed chars an ellipsis may skip in a quote
-QUOTE_MIN_WORDS = 3                                     # one- or two-word quoted spans are terms, not quotations
+QUOTE_MIN_WORDS = 3
+QUOTATION_WORDS = 5                                     # from here a quote must be on its own marker's case                                     # one- or two-word quoted spans are terms, not quotations
 # Legal-quotation alteration: a case change of 1-3 letters ("[b]ut" for "But") - the same letters must be in the source.
 # Omissions ("treat[]") and insertions ("[did not]") are not alterations: they stay literal, so they only match if the
 # source has them verbatim (an omission could otherwise swallow "not").
@@ -113,28 +115,35 @@ class Verifier:
                     problems.append({"kind": "uncited_case_reference", "cite": m.group(0)})
             if STATUS_CLAIM.search(s) and not STATUS_QUALIFIER.search(s):
                 problems.append({"kind": "unqualified_status_claim", "sentence": s[:300]})
-        # quotations are found over the whole answer (a quote may contain ". " and span "sentences"); the markers
-        # that support one are those on its line
+        # quotations are found over the whole answer (a quote may contain ". " and span "sentences"); each is
+        # attributed to its own marker - the first one after it on its line, else the last one before it
         for m in QUOTED.finditer(answer):
-            q = m.group(1) or m.group(2)
+            q = next(g for g in m.groups() if g)
             if (len(q.split()) < QUOTE_MIN_WORDS or CASE_CITE.fullmatch(q.strip(" ,.;"))
                     or squash(q).strip(".,;:").lower() == squash(STATUS).lower()):    # the status label itself
                 continue                                    # a quoted term ("Chevron deference") or a bare citation
             lo = answer.rfind("\n", 0, m.start()) + 1
             hi = answer.find("\n", m.end())
-            line = answer[lo:hi if hi >= 0 else len(answer)]
-            if not self._quote_on_cited_page(q, line, results):
+            hi = hi if hi >= 0 else len(answer)
+            after = MARKER.search(answer, m.end(), hi)
+            before = [b for b in MARKER.finditer(answer, lo, m.start())]
+            mk = after or (before[-1] if before else None)
+            marks = {int(n) for n in mk.group(1).split(",")} if mk else set()
+            if len(q.split()) < QUOTATION_WORDS:            # a quoted term or name: any case the answer cites
+                marks = set(range(1, len(results) + 1))
+            if not self._quote_on_cited_page(q, marks, results):
                 problems.append({"kind": "unverified_quote", "quote": q[:200]})
         tiers = {t: sum(r["tier"] == t for r in results) for t in (VERIFIED, EXTERNAL, UNVERIFIED)}
         return {"passed": not problems and bool(citations), "tiers": tiers, "citations": results,
                 "problems": problems if citations else problems + [{"kind": "no_citations"}]}
 
 
-    def _quote_on_cited_page(self, quote: str, sentence: str, results: list[dict]) -> bool:
-        """A quotation in the prose must be on a page of an in-corpus case cited in that sentence (any, if unmarked)."""
-        marks = {int(n) for m in MARKER.finditer(sentence) for n in m.group(1).split(",")}
+    def _quote_on_cited_page(self, quote: str, marks: set[int], results: list[dict]) -> bool:
+        """A quotation in the prose must be on a page of an in-corpus case cited by its own marker(s)."""
         cids = {r["case_id"] for i, r in enumerate(results, 1)
-                if r.get("in_corpus") and r.get("case_id") and (not marks or i in marks)}
+                if i in marks and r.get("in_corpus") and r.get("case_id")}
+        if not cids:
+            return False                                    # an unattributed quotation is unverified
         literal = len(squash(quote)) >= MIN_QUOTE and any(self.check_quote(c, quote)["quote_match"] for c in cids)
         if literal or not ALTERATION.search(quote):      # brackets can be in the source itself ("say[ing]")
             return literal

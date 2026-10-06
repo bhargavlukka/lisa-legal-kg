@@ -13,6 +13,10 @@ _ELLIPSIS = re.compile(r"\[?(?:\.\s*){3}\]?|…")
 _DROP = re.compile("[\\s\\-­‐-―\"'`‘-‟′″�]+")
 
 
+MAX_PIECES = 12           # ellipsis pieces per quote
+MAX_STARTS = 50           # occurrences of the first piece tried as a chain start (bounds work on repetitive pages)
+
+
 def squash(s: str) -> str:
     """Matching key: page/part markers removed, then whitespace, hyphens/dashes and all quote marks dropped."""
     return _DROP.sub("", _MARKERS.sub("", s))
@@ -53,12 +57,12 @@ class PageIndex:
         """Every ellipsis piece verbatim and in order within the page window; with max_gap, consecutive pieces at
         most that many (squashed) characters apart, so an ellipsis cannot stitch distant text together."""
         pieces = _pieces(quote)
-        if not pieces or max(map(len, pieces)) < MIN_QUOTE or page not in self._start:
+        if not pieces or max(map(len, pieces)) < MIN_QUOTE or page not in self._start or len(pieces) > MAX_PIECES:
             return None
         i = self.pages.index(page)
         prev, nxt = self.pages[max(i - 1, 0)], self.pages[min(i + 1, len(self.pages) - 1)]
         for lo, hi in ((self._start[page], self._end[nxt]), (self._start[prev], self._end[nxt])):
-            first = self.text.find(pieces[0], lo, hi)
+            first, tries = self.text.find(pieces[0], lo, hi), 0
             while first >= 0:             # each occurrence of the first piece may start a valid chain
                 pos = first + len(pieces[0])
                 for piece in pieces[1:]:
@@ -69,7 +73,8 @@ class PageIndex:
                     pos = k + len(piece)
                 else:
                     return Span(self.page_at(first), first, pos)
-                if max_gap is None:
+                tries += 1
+                if max_gap is None or tries >= MAX_STARTS:
                     break                 # without a gap limit the first occurrence is the most permissive
                 first = self.text.find(pieces[0], first + 1, hi)
         return None
