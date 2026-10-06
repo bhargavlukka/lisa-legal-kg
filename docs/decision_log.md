@@ -116,8 +116,8 @@ Consequences: traces are available even without a collector; JSONL files can be 
 Decision: multi-stage `Dockerfile` (`server` target runs any of the four servers via `LISA_SERVER`; `agent` adds
 node + the claude CLI). Data and built graphs are bind-mounted, never baked in. `docker-compose.yml` runs neo4j,
 jaeger, the four servers, and the agent on demand (`--profile agent` / `docker compose run`).
-Consequences: images contain no case data or secrets. Compose validated with `docker compose config`; not run live
-on the dev laptop (no Docker engine).
+Consequences: images contain no case data or secrets. The dev laptop has no Docker engine, so the stack is run live
+in CI (entry below).
 
 ## 2026-10-05 — Model path back to the spec default: `~z-ai/glm-flash-latest` from the SharedLLM pool
 Context: the BYOK path (own Ollama Cloud key through the gateway) hit the Ollama free-tier usage limit (429) during
@@ -130,3 +130,30 @@ Decision: LLM client on `/custom-openai/v1`, agent on `/anthropic` (spec 4.3), m
 virtual key only (`llm.auth: sharedllm`); the BYOK mode stays available in code but is not configured.
 Consequences: QA evaluation (KG agent and RAG) runs on the spec model, billed to the SharedLLM balance; the Phase 2
 extraction evaluation stays on `gpt-oss:120b` (cached; rerunning it on glm is a config change plus ~350 calls).
+
+## 2026-10-05 — Verifier hardened after a code and security review
+Context: the gate checked only each citation's own quote. Review rounds found ways to carry unverified text past it:
+quotations written into the prose, meaning-changing brackets (an omission could drop "not"), ellipses stitching
+distant text, and a combined alteration regex that could backtrack exponentially.
+Decision: quotations in the prose are checked (double / curly / guillemet / single quotes, nested pairs), each
+against the case cited by its own `[n]` marker; 1-2 word quoted terms skipped, 3-4 word terms must be in some cited
+case; brackets only as case changes (`[b]ut`), omissions and insertions literal; ellipsis gaps capped
+(`MAX_ELLIPSIS_GAP`), matching bounded (`MAX_PIECES`, `MAX_STARTS`, sequential search instead of a backtracking
+regex); unused citations flagged; legal cues case-insensitive; headings exempt only without assertions; external
+citations reject quotes and mismatched case names. `eval_qa.py --reverify` re-checks stored drafts with the new gate.
+Consequences: more drafts need a revision or are salvaged; earlier QA runs are re-checked rather than re-run.
+
+## 2026-10-05 — Docker stack validated in CI against a synthetic corpus
+Context: the dev laptop has no Docker engine, and the real case package must not leave it.
+Decision: `.github/workflows/docker.yml` runs the unit tests, generates a synthetic corpus
+(`scripts/ci_synthetic_data.py`), builds the graph and both images, starts the compose stack with throwaway secrets
+and runs `scripts/ci_smoke.py` (auth, roles, tools, no-token degradation over HTTP), then again with the graph server
+on the Neo4j backend, and starts the agent image.
+Consequences: compose, images and server wiring are tested live on each push and pull request; the agent's model path is not (dummy
+SharedLLM key), and results on the real corpus remain local.
+
+## 2026-10-05 — Containers run as the host UID/GID
+Context: the first CI stack run showed the servers could not write to the `./out` bind mount as the image's user.
+Decision: compose runs every container as `${LISA_UID:-10001}:${LISA_GID:-10001}`; the agent gets `HOME=/tmp` for
+the claude CLI state.
+Consequences: on Linux, `.env` sets `LISA_UID` / `LISA_GID` to the host user; Docker Desktop works with the defaults.

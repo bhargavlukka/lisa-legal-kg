@@ -4,12 +4,13 @@
 
 | use | endpoint | model | how it is called |
 |---|---|---|---|
-| RAG baseline, LLM calls from now on | `https://api.sharedllm.com/custom-openai/v1` (OpenAI-compatible) | `~z-ai/glm-flash-latest` | `src/lisa/llm/client.py`, temperature 0, JSON mode |
-| Research agent | `https://api.sharedllm.com/anthropic` (Anthropic-compatible, spec 4.3) | `~z-ai/glm-flash-latest` | Claude Agent SDK with `ANTHROPIC_BASE_URL` (`src/lisa/agent/agent.py`, `sdk_env`) |
-| Extraction tier + enrichment (already run, cached) | `https://api.sharedllm.com/ollama/v1` (BYOK) | `gpt-oss:120b` | same client; results in `docs/eval/extraction_report.md` |
+| RAG baseline, any new LLM-tier calls | `https://api.sharedllm.com/custom-openai/v1` (OpenAI-compatible) | `~z-ai/glm-flash-latest` | `src/lisa/llm/client.py`, temperature 0, JSON mode |
+| Research agent | `https://api.sharedllm.com/anthropic` (Anthropic-compatible, spec 4.3) | `~z-ai/glm-flash-latest` | Claude Agent SDK with `ANTHROPIC_BASE_URL`; the CLI sends the virtual key as bearer (`ANTHROPIC_AUTH_TOKEN`) plus `X-SharedLLM-Key` (`src/lisa/agent/agent.py`, `sdk_env`) |
+| Extraction tier + enrichment, extraction evaluation (history: already run, cached) | `https://api.sharedllm.com/ollama/v1` (BYOK) | `gpt-oss:120b` | same client; results in `docs/eval/extraction_report.md` |
 
 The model path is the spec's standard path exactly: the SharedLLM gateway, authenticated **only** with the virtual
-key (`X-SharedLLM-Key: $SHAREDLLM_API_KEY`), serving `z-ai/glm-flash-latest` from the shared pool (billed to the
+key (`llm.auth: sharedllm`: `X-SharedLLM-Key: $SHAREDLLM_API_KEY`, no provider key; the agent CLI also sends the
+virtual key as its bearer, because the gateway forwards `x-api-key` upstream as a provider key), serving `z-ai/glm-flash-latest` from the shared pool (billed to the
 account balance). The gateway exposes that model under its Custom provider as `~z-ai/glm-flash-latest` (the id the
 dashboard Playground exports); without the `~` the gateway routed to the account's own contributed keys, which the
 upstream rejected (401), which is why the extraction tier earlier ran in bring-your-own-key mode on `gpt-oss:120b`
@@ -23,7 +24,7 @@ endpoint is a config change, and the LLM cache key includes the model, so result
 | Response encoding | SharedLLM | replies are padded with leading whitespace, which corrupts gzip decoding -> client sends `Accept-Encoding: identity` |
 | Concurrent requests | gateway / Ollama Cloud | 12 in flight (2 runs x 6 workers) -> HTTP 429 "too many concurrent requests"; 3 workers per run is stable |
 | Daily request cap, per-minute tokens | SharedLLM tiered caps (spec §6) | budgeted per run, see below |
-| Output length | gpt-oss spends output tokens on hidden reasoning | `max_output_tokens: 16384`; a truncated reply (`finish_reason: length`) is recorded as a failed window, not parsed |
+| Output length | reasoning models spend output tokens on hidden reasoning | `max_output_tokens: 16384`; glm-flash otherwise reasons until the cap, so `llm.reasoning: {max_tokens: 4096}`; a truncated (`finish_reason: length`) or empty reply is never cached and is recorded as a failed window, not parsed |
 | Latency | measured | extraction call ~30-60 s (20k in / 15k out tokens per unit); enrichment 203 calls in 573 s with 6 workers; agent turn 6-10 min (first verified answer 589 s, pilot q01 413 s) |
 | CourtListener | spec §6 | 5/min, 50/hour, 125/day per free token |
 
@@ -51,7 +52,7 @@ endpoint is a config change, and the LLM cache key includes the model, so result
 | HTTP 429 / 5xx / network error | exponential backoff with jitter, honouring `Retry-After`, up to 6 attempts; then that unit/job is recorded as failed and the run continues |
 | Budget reached | run stops cleanly (exit 3); rerun the same command to continue from the cache |
 | Invalid JSON | one repair request quoting the parse error; schema violations are rejected per item, not per unit |
-| Truncated reply | that window is recorded as failed (`out/llm_runs`) and the run continues |
+| Truncated or empty reply | not cached (a rerun retries it); that window is recorded as failed (`out/llm_runs`) and the run continues |
 | Missing key | clear error naming the variable; `--offline` still replays cached work |
 | Model unreachable during an agent turn | the turn fails closed: refusal text, status `error`, nothing unverified is delivered |
 | Answer fails the citation verifier | up to 2 revisions, then salvage of verified sentences, then refusal |
@@ -63,3 +64,5 @@ The model runs remotely; locally the heavy parts are the in-memory graph (one co
 (fastembed bge-small on CPU, embedded in batches of 16 to keep peak memory low, index cached in `out/eval/`).
 Docker Desktop is not required for development: the servers run as plain processes (`scripts/serve_all.py`) and the
 in-memory store replaces Neo4j.
+The compose stack (Neo4j, Jaeger, four servers, agent image) is run live in GitHub Actions instead
+(`.github/workflows/docker.yml`, synthetic corpus).

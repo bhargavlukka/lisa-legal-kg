@@ -49,19 +49,42 @@ Four FastMCP servers over streamable HTTP, launched together by `scripts/serve_a
 | analytics | most_cited_precedents (PageRank / in-degree), statute_frequency, doctrine_influence, cross_corpus_bridges | refresh_analytics |
 | external-law | resolve_citation, search_opinions, get_opinion_cluster, get_docket, quota_status | clear_cache |
 
-Case text (pages, search snippets, edge-evidence quotes, CourtListener names) leaves the servers only inside `<<<UNTRUSTED_CASE_TEXT ... UNTRUSTED_CASE_TEXT>>>` fences with injection
-flags (`common/untrusted.py`). The verifier resolves a citation to a corpus case and checks the quote against the
-stored page text (whitespace / typography normalized); out-of-corpus reporter citations go to CourtListener. Tiers:
-`verified_in_corpus`, `resolved_externally`, `unverified`. CourtListener calls (`common/courtlistener.py`) go through
-a disk cache keyed by request, a persisted per-minute/hour/day quota ledger, and exponential backoff honouring
-`Retry-After`; no token, exhausted quota or network failure returns a structured `unavailable` result.
+Untrusted text leaves the servers only inside `<<<UNTRUSTED_CASE_TEXT ... UNTRUSTED_CASE_TEXT>>>` fences with
+injection flags (`common/untrusted.py`): `read_page` and search snippets via `fence`, and every free-text field
+(`quote`, `snippet`, `syllabus`, `case_name`, `caption`, `cause`, `nature_of_suit`) at any depth of a graph or
+external-law tool result via `fence_fields`. Fence markers inside the text are defanged.
+
+**Citation verifier** (`tools/verifier.py`, quote matching in `extract/verify.py`). A citation resolves to a corpus
+case or, for an out-of-corpus reporter citation, to CourtListener. Tiers: `verified_in_corpus` (in-corpus case and
+the quote is on its stored pages, whitespace / dashes / quote marks normalized), `resolved_externally`, `unverified`.
+`verify_answer` checks a draft against its numbered citations:
+
+- at least one citation, every citation verified; no dangling `[n]` markers and no unused citations;
+- quotations in the prose (double, curly, guillemet and single quotes; each style pairs only with itself, so nested
+  quotes work) are checked too: 1-2 word quoted terms, bare citations and the status label are skipped; 3-4 word
+  terms must be on a page of some cited in-corpus case; longer quotations on a page of the case cited by their own
+  marker (the first `[n]` after the quote on its line, else the last one before it); an unattributed quotation fails;
+- ellipsis pieces must appear in order, each gap at most `MAX_ELLIPSIS_GAP` (300 squashed chars), on one page or two
+  adjacent pages (a different cited page is only noted); `locate` is bounded (`MAX_PIECES` 12 pieces, `MAX_STARTS`
+  50 start positions);
+- bracket alterations are accepted only as case changes of the same letters (`[b]ut`); omissions (`treat[]`) and
+  insertions (`[did not]`) stay literal;
+- sentences with legal cues (case-insensitive) or reporter citations need a marker; short all-caps headings are
+  exempt only when they contain no assertion; source / disclaimer lines are exempt;
+- "good law" claims need a "not verified" qualifier;
+- external citations: a quote is rejected (the source text is not stored) and the given case name must match the
+  name CourtListener resolved.
+
+CourtListener calls (`common/courtlistener.py`) go through a disk cache keyed by request, a persisted
+per-minute/hour/day quota ledger, and exponential backoff honouring `Retry-After`; no token, exhausted quota or network failure returns a structured `unavailable` result.
 
 ## L3 - agent (`src/lisa/agent`)
 
 `ResearchAgent.ask` runs one research turn with the Claude Agent SDK pointed at the SharedLLM Anthropic-compatible
-route. Wired in: the `legal-research` skill (`agent/.claude/skills/legal-research/SKILL.md`), the `citation-chaser`
-subagent (`agent/subagents/citation_chaser.py`), a PreToolUse hook that denies anything outside the MCP tool
-allowlist and records the trajectory, and `SessionMemory` (`out/sessions/<name>.json` digest + SDK session resume),
+route (`/anthropic`, model `~z-ai/glm-flash-latest`); the CLI authenticates with the virtual key as bearer plus
+`X-SharedLLM-Key` (`sdk_env`). Wired in: the `legal-research` skill
+(`agent/.claude/skills/legal-research/SKILL.md`), the `citation-chaser` subagent
+(`agent/subagents/citation_chaser.py`), a PreToolUse hook that denies anything outside the MCP tool allowlist and records the trajectory, and `SessionMemory` (`out/sessions/<name>.json` digest + SDK session resume),
 so a session survives restarts.
 
 Guardrails are code, not prompt text (`agent/guardrails/gate.py`): the final JSON is parsed, sent to
@@ -80,16 +103,26 @@ notice, and the advice disclaimer when the question asks for advice. Each turn i
   same verifier gate). Scoring (`eval/qa.py`): recall/precision of verified in-corpus citations against expected
   cases, expected behaviour (answer / refuse / disclaimer), latency, tokens, and trajectory checks (required tools
   used, only allowlisted tools, `verify_answer` called by the model). Report: `docs/eval/qa_report.md`, analysed in
-  [evaluation_report.md](evaluation_report.md).
+  [evaluation_report.md](evaluation_report.md). `--reverify kg` re-checks the stored drafts with the current gate
+  (-> `out/eval/reverify_kg.md`), since the verifier was hardened after the run.
+- Degradation: a token-less verifier + external server pair with its own `LISA_OUT_DIR`, run beside the normal
+  servers on ports moved with `LISA_<NAME>_PORT` (`--tag no_token`).
+- Models: the extraction evaluation ran on `gpt-oss:120b` (history, cached); QA on `~z-ai/glm-flash-latest` from the pool.
 
 ## L5 - security and operations
 
-HS256 JWTs (`common/auth.py`) with `researcher` / `admin` roles on every server; threat analysis in
+HS256 JWTs (`common/auth.py`) with `researcher` / `admin` roles on every server; a weak or placeholder
+`LISA_AUTH_SECRET` (< 32 chars, `REPLACE...`, `change-me`) is refused; threat analysis in
 [threat_model.md](threat_model.md). OpenTelemetry spans for agent turns, tool calls, verifier gate decisions and
 server tool executions (`common/tracing.py`) go to Jaeger over OTLP/HTTP and to `out/traces/*.jsonl`.
 `docker-compose.yml` brings up Neo4j, Jaeger, the four servers and (on demand) the agent; secrets come only from
 `.env`, each server gets only the secrets it uses, the agent gets the SharedLLM key and a pre-issued researcher
-token (never the signing secret), and all ports bind to 127.0.0.1. Rate-limit budgets: see
+token (never the signing secret), and all ports bind to 127.0.0.1. Containers run as `LISA_UID:LISA_GID` (the
+host user, so the `./out` bind mount is writable); the image installs the package editable so
+`config/` resolves from the source tree.
+GitHub Actions (`.github/workflows/docker.yml`) builds both images and runs the stack live against a synthetic corpus
+(`scripts/ci_synthetic_data.py`); `scripts/ci_smoke.py` checks auth, roles, tools and the no-token degradation over
+HTTP, on the memory and the Neo4j backend, and the agent image is started. Rate-limit budgets: see
 [model_constraints.md](model_constraints.md).
 
 ## Data never in the repo
