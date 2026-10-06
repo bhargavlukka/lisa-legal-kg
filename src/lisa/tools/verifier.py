@@ -28,10 +28,12 @@ CASE_CITE = re.compile(r"\b\d{1,3}\s+(?:I&N\s*Dec\.|U\.\s?S\.|S\.\s?Ct\.|F\.\s?(
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 QUOTED = re.compile(r"[\"“«]([^\"“”«»]+)[\"”»]"            # a quotation in the answer prose: double quotes,
                     r"|(?<!\w)['‘]([^'‘’\n]{12,}?)['’](?!\w)")  # guillemets, or single quotes (not apostrophes)
+MAX_ELLIPSIS_GAP = 300                                  # squashed chars an ellipsis may skip in a quote
 QUOTE_MIN_WORDS = 3                                     # one- or two-word quoted spans are terms, not quotations
-# Legal-quotation alterations: a changed or dropped letter group ("[b]ut", "treat[]", "rule[s]"). Anything longer in
-# brackets ("[did not]") is an insertion and stays literal, so it can only match if the source has it verbatim.
-ALTERATION = re.compile(r"\[[A-Za-z]{0,3}\]")
+# Legal-quotation alteration: a case change of 1-3 letters ("[b]ut" for "But") - the same letters must be in the source.
+# Omissions ("treat[]") and insertions ("[did not]") are not alterations: they stay literal, so they only match if the
+# source has them verbatim (an omission could otherwise swallow "not").
+ALTERATION = re.compile(r"\[[A-Za-z]{1,3}\]")
 NAME_STOP = {"matter", "united", "states", "the", "and", "rel."}
 EXEMPT = re.compile(r"^\s*(#|\*\*?(provenance|sources|citations|disclaimer)|provenance|sources?:|disclaimer|note:|"
                     r"this is (legal )?research|i (could|did) not find|no (case|result))", re.I)
@@ -54,7 +56,7 @@ class Verifier:
         candidates = [page] if page in idx.pages else []
         candidates += [p for p in idx.pages if p != page]
         for p in candidates:
-            sp = idx.locate(quote, p)
+            sp = idx.locate(quote, p, max_gap=MAX_ELLIPSIS_GAP)
             if sp:
                 return {"quote_match": True, "matched_page": sp.page,
                         "page_note": None if page in (None, sp.page) else f"quote found on page {sp.page}, not {page}"}
@@ -109,13 +111,20 @@ class Verifier:
             for m in CASE_CITE.finditer(s):
                 if not MARKER.search(s):
                     problems.append({"kind": "uncited_case_reference", "cite": m.group(0)})
-            for q in (a or b for a, b in QUOTED.findall(s)):
-                if len(q.split()) < QUOTE_MIN_WORDS or CASE_CITE.fullmatch(q.strip(" ,.;")):
-                    continue                                # a quoted term ("Chevron deference") or a bare citation
-                if not self._quote_on_cited_page(q, s, results):
-                    problems.append({"kind": "unverified_quote", "quote": q[:200]})
             if STATUS_CLAIM.search(s) and not STATUS_QUALIFIER.search(s):
                 problems.append({"kind": "unqualified_status_claim", "sentence": s[:300]})
+        # quotations are found over the whole answer (a quote may contain ". " and span "sentences"); the markers
+        # that support one are those on its line
+        for m in QUOTED.finditer(answer):
+            q = m.group(1) or m.group(2)
+            if (len(q.split()) < QUOTE_MIN_WORDS or CASE_CITE.fullmatch(q.strip(" ,.;"))
+                    or squash(q).strip(".,;:").lower() == squash(STATUS).lower()):    # the status label itself
+                continue                                    # a quoted term ("Chevron deference") or a bare citation
+            lo = answer.rfind("\n", 0, m.start()) + 1
+            hi = answer.find("\n", m.end())
+            line = answer[lo:hi if hi >= 0 else len(answer)]
+            if not self._quote_on_cited_page(q, line, results):
+                problems.append({"kind": "unverified_quote", "quote": q[:200]})
         tiers = {t: sum(r["tier"] == t for r in results) for t in (VERIFIED, EXTERNAL, UNVERIFIED)}
         return {"passed": not problems and bool(citations), "tiers": tiers, "citations": results,
                 "problems": problems if citations else problems + [{"kind": "no_citations"}]}
@@ -141,13 +150,13 @@ class Verifier:
 
 
 def _alteration_pattern(seg: str) -> str:
-    """Regex over squashed page text for one quote segment. "[b]" is a case change (the same letter, either case);
-    "[]" marks letters omitted from the source (0-4). Additive brackets ("[un]", "[s not]") stay literal."""
+    """Regex over squashed page text for one quote segment: each "[b]" alteration matches the same letters in
+    either case."""
     out, pos = [], 0
     for m in ALTERATION.finditer(seg):
         out.append(re.escape(squash(seg[pos:m.start()])))
         inner = m.group(0)[1:-1]
-        out.append("[A-Za-z]{0,4}" if not inner else "".join(f"[{c.lower()}{c.upper()}]" for c in inner))
+        out.append("".join(f"[{c.lower()}{c.upper()}]" for c in inner))
         pos = m.end()
     out.append(re.escape(squash(seg[pos:])))
     return "".join(out)

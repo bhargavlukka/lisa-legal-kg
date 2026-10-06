@@ -128,9 +128,9 @@ def test_short_fabrications_and_bracket_insertions_are_caught(v, prose):
     assert "unverified_quote" in {p["kind"] for p in r["problems"]}, prose
 
 
-def test_suffix_alteration_matches_contiguously(v):
-    ok = v.verify_answer("The Board said \u201cthe notice wa[] defective\u201d [1].", CIT)
-    assert ok["passed"], ok["problems"]
+def test_omission_brackets_are_literal_not_wildcards(v):
+    r = v.verify_answer("The Board said \u201cthe notice wa[] defective\u201d [1].", CIT)
+    assert "unverified_quote" in {p["kind"] for p in r["problems"]}
 
 
 def test_alteration_with_ellipsis_headings_and_quoted_citations(v):
@@ -164,3 +164,35 @@ def test_meaning_changing_alterations_other_quote_marks_and_caps_claims_are_caug
 def test_case_change_alteration_and_apostrophes_still_pass(v):
     r = v.verify_answer("The Board\u2019s view: \u201c(2018), [T]he notice was defective\u201d isn't new [1].", CIT)
     assert r["passed"], r["problems"]
+
+
+def test_quoting_the_system_status_label_is_not_a_case_quotation(v):
+    from lisa.store.memory import STATUS
+    r = v.verify_answer(f"Legal status of [1]: '{STATUS}'.", CIT)
+    assert "unverified_quote" not in {p["kind"] for p in r["problems"]}
+
+
+def test_omission_brackets_cannot_swallow_words(graph_all):
+    store = MemoryStore([graph_all])
+    store.pages["eoir_1"][2] += "\nWe hold that the regulation is not valid as applied to the respondent here."
+    r = Verifier(store).verify_answer('The Board said "the regulation is [] valid as applied to the respondent" [1].', CIT)
+    assert "unverified_quote" in {p["kind"] for p in r["problems"]}
+
+
+def test_ellipsis_cannot_stitch_distant_text(graph_all):
+    store = MemoryStore([graph_all])
+    store.pages["eoir_1"][2] += "\nThe Board has jurisdiction. " + "Unrelated filler sentence. " * 40 + "Asylum is granted to the other applicant."
+    v = Verifier(store)
+    far = v.verify_answer('The Board said "The Board has jurisdiction . . . Asylum is granted to the other applicant" [1].', CIT)
+    assert "unverified_quote" in {p["kind"] for p in far["problems"]}
+    assert v.check_quote("eoir_1", "The Board has jurisdiction . . . Asylum is granted to the other applicant")["quote_match"] is False
+
+
+def test_quotation_spanning_a_sentence_break_is_still_checked(v):
+    r = v.verify_answer('The Board said "the notice was fine. Relief is granted to all respondents" [1].', CIT)
+    assert "unverified_quote" in {p["kind"] for p in r["problems"]}
+
+
+def test_quotation_spanning_a_sentence_break_is_still_checked(v):
+    r = v.verify_answer('The Board said "the notice was fine. Relief is granted to all respondents" [1].', CIT)
+    assert "unverified_quote" in {p["kind"] for p in r["problems"]}

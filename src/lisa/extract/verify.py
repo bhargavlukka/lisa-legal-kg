@@ -49,22 +49,29 @@ class PageIndex:
     def page_at(self, offset: int) -> int:
         return self.pages[bisect.bisect_right(self._starts, offset) - 1]
 
-    def locate(self, quote: str, page: int | None) -> Span | None:
+    def locate(self, quote: str, page: int | None, max_gap: int | None = None) -> Span | None:
+        """Every ellipsis piece verbatim and in order within the page window; with max_gap, consecutive pieces at
+        most that many (squashed) characters apart, so an ellipsis cannot stitch distant text together."""
         pieces = _pieces(quote)
         if not pieces or max(map(len, pieces)) < MIN_QUOTE or page not in self._start:
             return None
         i = self.pages.index(page)
         prev, nxt = self.pages[max(i - 1, 0)], self.pages[min(i + 1, len(self.pages) - 1)]
         for lo, hi in ((self._start[page], self._end[nxt]), (self._start[prev], self._end[nxt])):
-            pos, start = lo, None
-            for piece in pieces:          # every piece verbatim, in order
-                k = self.text.find(piece, pos, hi)
-                if k < 0:
-                    break
-                start = k if start is None else start
-                pos = k + len(piece)
-            else:
-                return Span(self.page_at(start), start, pos)
+            first = self.text.find(pieces[0], lo, hi)
+            while first >= 0:             # each occurrence of the first piece may start a valid chain
+                pos = first + len(pieces[0])
+                for piece in pieces[1:]:
+                    end = hi if max_gap is None else min(hi, pos + max_gap + len(piece))
+                    k = self.text.find(piece, pos, end)
+                    if k < 0:
+                        break
+                    pos = k + len(piece)
+                else:
+                    return Span(self.page_at(first), first, pos)
+                if max_gap is None:
+                    break                 # without a gap limit the first occurrence is the most permissive
+                first = self.text.find(pieces[0], first + 1, hi)
         return None
 
 
