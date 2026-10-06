@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -79,3 +80,15 @@ def edges_of(graph: dict, etype: str) -> dict:
 
 def nodes_of(graph: dict, label: str) -> dict:
     return {n["id"]: n for n in graph["nodes"] if n["label"] == label}
+
+
+@pytest.fixture
+def real_data_dir() -> Path:
+    """Real LISA package data; tests using it skip on machines without the package."""
+    from dotenv import load_dotenv
+    from lisa.common.config import REPO_ROOT
+    load_dotenv(REPO_ROOT / ".env")
+    raw = os.environ.get("LISA_DATA_DIR")
+    if not raw or not (Path(raw) / "gold_standard").is_dir():
+        pytest.skip("real LISA data not available")
+    return Path(raw)

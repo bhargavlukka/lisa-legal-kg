@@ -1,9 +1,43 @@
+# Full LISA stack: Neo4j, Jaeger (traces), the four MCP servers, and the research agent.
+#   docker compose --env-file .env up -d --build             # neo4j, jaeger, 4 servers
+#   docker compose --env-file .env run --rm agent "Which immigration decisions cite Pereira v. Sessions?"
+# Build the graphs first on the host (they are mounted from ./out): scripts/rebuild.sh or scripts/rebuild.ps1.
+# Secrets come from .env (never committed). LISA_GRAPH_BACKEND=neo4j serves from Neo4j instead of the JSON graphs
+# (load it with scripts/load_neo4j.py).
+
+x-server: &server
+  build: {context: ., target: server}
+  image: lisa-server
+  restart: unless-stopped
+  # ./out is a bind mount: run as the host user so the servers can write caches and traces there
+  # (Linux: put LISA_UID=$(id -u) and LISA_GID=$(id -g) in .env; Docker Desktop works with the defaults)
+  user: "${LISA_UID:-10001}:${LISA_GID:-10001}"
+  # Each service gets only the secrets it uses: every server verifies tokens (LISA_AUTH_SECRET); graph-backed
+  # servers get the Neo4j login; only verifier + external get the CourtListener token; the LLM key goes to the agent.
+  environment: &server-env
+    LISA_AUTH_SECRET: ${LISA_AUTH_SECRET:?set LISA_AUTH_SECRET in .env}
+    LISA_HOST: 0.0.0.0
+    LISA_DATA_DIR: /data
+    LISA_OUT_DIR: /app/out
+    LISA_GRAPH_BACKEND: ${LISA_GRAPH_BACKEND:-memory}
+    NEO4J_URI: bolt://neo4j:7687
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  volumes:
+    - "${LISA_DATA_DIR:?set LISA_DATA_DIR in .env}:/data:ro"
+    - ./out:/app/out
+  depends_on:
+    jaeger: {condition: service_started}
+
+x-neo4j-login: &neo4j-login
+  NEO4J_USER: ${NEO4J_USER:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
+
 services:
   neo4j:
     image: neo4j:5-community
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
     volumes:
@@ -12,5 +46,62 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
       interval: 5s
       retries: 30
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:16686:16686"   # UI
+      - "127.0.0.1:4318:4318"     # OTLP/HTTP
+
+  graph:
+    <<: *server
+    environment: {<<: [*server-env, *neo4j-login], LISA_SERVER: lisa.servers.graph_server}
+    ports: ["127.0.0.1:8101:8101"]
+
+  verifier:
+    <<: *server
+    environment: {<<: [*server-env, *neo4j-login], LISA_SERVER: lisa.servers.citation_verifier,
+                  COURTLISTENER_TOKEN: "${COURTLISTENER_TOKEN:-}"}
+    ports: ["127.0.0.1:8102:8102"]
+
+  analytics:
+    <<: *server
+    environment: {<<: [*server-env, *neo4j-login], LISA_SERVER: lisa.servers.analytics_server}
+    ports: ["127.0.0.1:8103:8103"]
+
+  external:
+    <<: *server
+    environment: {<<: *server-env, LISA_SERVER: lisa.servers.external_law_server,
+                  COURTLISTENER_TOKEN: "${COURTLISTENER_TOKEN:-}"}
+    ports: ["127.0.0.1:8104:8104"]
+
+  agent:
+    build:
+      context: .
+      target: agent
+      args: {CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.289}"}
+    image: lisa-agent
+    user: "${LISA_UID:-10001}:${LISA_GID:-10001}"
+    profiles: [agent]          # run on demand: docker compose run --rm agent "<question>"
+    # No signing secret here: the agent uses a pre-issued researcher token (scripts/issue_token.py lisa-agent), so it
+    # cannot mint admin tokens. Only the SharedLLM key and that token are passed.
+    environment:
+      SHAREDLLM_API_KEY: ${SHAREDLLM_API_KEY:?set SHAREDLLM_API_KEY in .env}
+      HOME: /tmp                 # the claude CLI keeps its state under $HOME; any UID can write /tmp
+      LISA_AGENT_TOKEN: ${LISA_AGENT_TOKEN:?set LISA_AGENT_TOKEN in .env (python scripts/issue_token.py lisa-agent)}
+      LISA_DATA_DIR: /data
+      LISA_OUT_DIR: /app/out
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      LISA_GRAPH_URL: http://graph:8101/mcp
+      LISA_VERIFIER_URL: http://verifier:8102/mcp
+      LISA_ANALYTICS_URL: http://analytics:8103/mcp
+      LISA_EXTERNAL_URL: http://external:8104/mcp
+    volumes:
+      - "${LISA_DATA_DIR:?set LISA_DATA_DIR in .env}:/data:ro"
+      - ./out:/app/out
+    depends_on: [graph, verifier, analytics, external]
+
 volumes:
   neo4j_data: {}
