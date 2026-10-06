@@ -163,3 +163,24 @@ def test_reasoning_cap_is_sent_and_part_of_the_cache_key(tmp_path):
     plain, _, seen2, _ = make(tmp_path / "p", [(200, chat_payload("x"), {})])
     plain.complete(MSG, "v1")
     assert "reasoning" not in json.loads(seen2[0].content)
+
+
+def test_truncated_or_empty_replies_are_returned_but_never_cached(tmp_path):
+    c, stats, _, _ = make(tmp_path, [(200, chat_payload("", "length"), {}), (200, chat_payload("", "stop"), {}),
+                                     (200, chat_payload('{"ok": 1}'), {}), ])
+    assert c.complete(MSG, "v1").finish_reason == "length"     # caller still sees the truncation
+    assert c.complete(MSG, "v1").text == ""                     # not replayed from cache: a fresh request
+    assert c.complete(MSG, "v1").text == '{"ok": 1}'
+    assert c.complete(MSG, "v1").cached and stats.requests == 3  # only the good reply was cached
+
+
+def test_non_json_200_is_an_llm_error(tmp_path):
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, text="<html>gateway</html>")
+    c = LLMClient(llm_settings(), Cache(tmp_path / "c"), Budget(5), RunStats(), transport=httpx.MockTransport(handler),
+                  sleep=lambda s: None, rng=random.Random(0))
+    with pytest.raises(LLMError, match="malformed"):
+        c.complete(MSG, "v1")

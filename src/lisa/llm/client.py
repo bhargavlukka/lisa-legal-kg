@@ -105,9 +105,13 @@ class LLMClient:
                 status, err = None, f"{type(e).__name__}: {e}"
             else:
                 if r.status_code == 200:
-                    payload = r.json()
-                    self.cache.put(key, payload)
-                    c = _completion(payload, cached=False)
+                    try:
+                        payload = r.json()
+                    except ValueError:
+                        raise LLMError(f"malformed response: {r.text[:200]}") from None
+                    c = _completion(payload, cached=False)               # validate before caching
+                    if c.text.strip() and c.finish_reason != "length":
+                        self.cache.put(key, payload)                     # truncated/empty replies are retried, not replayed
                     with self._lock:
                         self.stats.input_tokens += c.input_tokens
                         self.stats.output_tokens += c.output_tokens
