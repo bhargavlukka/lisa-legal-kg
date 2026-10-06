@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from lisa.extract.verify import MIN_QUOTE, PageIndex, squash
+from lisa.extract.verify import _ELLIPSIS, MIN_QUOTE, PageIndex, squash
 from lisa.graph.canon import canon
 from lisa.store.memory import STATUS
 
@@ -27,7 +27,10 @@ LEGAL_CUES = re.compile(r"\b(held|holds|holding|ruled|rules|concluded|decided|fo
 CASE_CITE = re.compile(r"\b\d{1,3}\s+(?:I&N\s*Dec\.|U\.\s?S\.|S\.\s?Ct\.|F\.\s?(?:2d|3d|4th)|F\.\s?Supp\.)\s*\d{1,4}\b")
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 QUOTED = re.compile(r"[\"“]([^\"“”]+)[\"”]")          # a quotation in the answer prose
-QUOTE_MIN_WORDS = 5                                     # shorter quoted spans are terms, not quotations
+QUOTE_MIN_WORDS = 3                                     # one- or two-word quoted spans are terms, not quotations
+# Legal-quotation alterations: a changed or dropped letter group ("[b]ut", "treat[]", "rule[s]"). Anything longer in
+# brackets ("[did not]") is an insertion and stays literal, so it can only match if the source has it verbatim.
+ALTERATION = re.compile(r"\[[A-Za-z]{0,3}\]")
 NAME_STOP = {"matter", "united", "states", "the", "and", "rel."}
 EXEMPT = re.compile(r"^\s*(#|\*\*?(provenance|sources|citations|disclaimer)|provenance|sources?:|disclaimer|note:|"
                     r"this is (legal )?research|i (could|did) not find|no (case|result))", re.I)
@@ -98,7 +101,7 @@ class Verifier:
             if r["tier"] == UNVERIFIED:
                 problems.append({"kind": "unverified_citation", "marker": i, "case": r["case"], "reason": r.get("reason")})
         for s in sentences(answer):
-            if EXEMPT.search(s):
+            if EXEMPT.search(s) or (s.isupper() and len(s.split()) <= 6):     # headings ("SUPREME COURT")
                 continue
             if LEGAL_CUES.search(s) and not MARKER.search(s):
                 problems.append({"kind": "uncited_claim", "sentence": s[:300]})
@@ -106,13 +109,9 @@ class Verifier:
                 if not MARKER.search(s):
                     problems.append({"kind": "uncited_case_reference", "cite": m.group(0)})
             for q in QUOTED.findall(s):
-                # a quoted term ("Chevron deference") is not a quotation; bracketed alterations ("[b]ut") are
-                # standard legal quoting ("[b]ut", "treat[]"): an alteration is a gap, like an ellipsis - the pieces
-                # around it must each be on the page, in order
-                q = re.sub(r"\[[^\]]{0,40}\]", " ... ", q)
-                if len(q.split()) < QUOTE_MIN_WORDS:
-                    continue
-                if len(squash(q)) >= MIN_QUOTE and not self._quote_on_cited_page(q, s, results):
+                if len(q.split()) < QUOTE_MIN_WORDS or CASE_CITE.fullmatch(q.strip(" ,.;")):
+                    continue                                # a quoted term ("Chevron deference") or a bare citation
+                if not self._quote_on_cited_page(q, s, results):
                     problems.append({"kind": "unverified_quote", "quote": q[:200]})
             if STATUS_CLAIM.search(s) and not STATUS_QUALIFIER.search(s):
                 problems.append({"kind": "unqualified_status_claim", "sentence": s[:300]})
@@ -126,7 +125,22 @@ class Verifier:
         marks = {int(n) for m in MARKER.finditer(sentence) for n in m.group(1).split(",")}
         cids = {r["case_id"] for i, r in enumerate(results, 1)
                 if r.get("in_corpus") and r.get("case_id") and (not marks or i in marks)}
-        return any(self.check_quote(cid, quote)["quote_match"] for cid in cids)
+        literal = len(squash(quote)) >= MIN_QUOTE and any(self.check_quote(c, quote)["quote_match"] for c in cids)
+        if literal or not ALTERATION.search(quote):      # brackets can be in the source itself ("say[ing]")
+            return literal
+        # each ellipsis-separated segment must match contiguously on one page, an alteration standing for at most
+        # 4 letters - never a gap of arbitrary text
+        segs = []
+        for seg in _ELLIPSIS.split(quote):
+            ps = [squash(p) for p in ALTERATION.split(seg)]
+            ps[0], ps[-1] = ps[0].lstrip(".,;:"), ps[-1].rstrip(".,;:")   # trim only the segment's outer ends
+            if "".join(ps):
+                segs.append(ps)
+        if sum(len(x) for ps in segs for x in ps) < MIN_QUOTE:
+            return False
+        pats = [re.compile(r"[A-Za-z]{0,4}".join(map(re.escape, ps))) for ps in segs]
+        return any(all(pt.search(sq) for pt in pats)
+                   for c in cids for sq in (squash(t) for t in self.store.pages.get(c, {}).values()))
 
 
 def _name_mismatch(cited: str, resolved: str) -> str | None:

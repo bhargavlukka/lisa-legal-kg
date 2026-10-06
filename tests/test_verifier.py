@@ -116,3 +116,34 @@ def test_quoted_terms_are_not_quotations_and_bracket_alterations_match(v):
     assert altered["passed"], altered["problems"]
     fake = v.verify_answer("The Board noted that \u201c(2018), [t]he notice was perfectly valid\u201d [1].", CIT)
     assert "unverified_quote" in {p["kind"] for p in fake["problems"]}
+
+
+@pytest.mark.parametrize("prose", [
+    'The Board said "asylum was plainly granted" [1].',                                   # short fabricated quote
+    "The Board said \u201cthe notice [was not] defective\u201d [1].",                    # inserted words via brackets
+    "The Board said \u201c(2018), the notice [wasn't] defective\u201d [1].",
+])
+def test_short_fabrications_and_bracket_insertions_are_caught(v, prose):
+    r = v.verify_answer(prose, CIT)
+    assert "unverified_quote" in {p["kind"] for p in r["problems"]}, prose
+
+
+def test_suffix_alteration_matches_contiguously(v):
+    ok = v.verify_answer("The Board said \u201cthe notice wa[] defective\u201d [1].", CIT)
+    assert ok["passed"], ok["problems"]
+
+
+def test_alteration_with_ellipsis_headings_and_quoted_citations(v):
+    ok = v.verify_answer("The Board said \u201c(2018), [t]he notice . . . defective\u201d [1].", CIT)
+    assert ok["passed"], ok["problems"]
+    head = v.verify_answer("SUPREME COURT\nThe Board held the notice was defective [1].", CIT)
+    assert head["passed"], head["problems"]
+    cite = v.verify_answer('The Board relied on "585 U.S. 198" for this [1].', CIT)
+    assert "unverified_quote" not in {p["kind"] for p in cite["problems"]}
+
+
+def test_brackets_present_in_the_source_match_literally(graph_all):
+    store = MemoryStore([graph_all])
+    store.pages["eoir_1"][2] += "\nthe basic judicial task of \u201csay[ing] what the law is.\u201d"
+    r = Verifier(store).verify_answer('It is the task of "say[ing] what the law is" [1].', CIT)
+    assert r["passed"], r["problems"]
