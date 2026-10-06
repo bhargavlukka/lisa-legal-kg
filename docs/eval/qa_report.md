@@ -1,45 +1,46 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 13/28 questions run
+- kg: 26/28 questions run
+- kg_no_token: 2/28 questions run
 - rag: 28/28 questions run
 
 ## Summary
 
-| metric | kg | rag |
-|---|---|---|
-| n | 13 | 28 |
-| recall | 1.000 | 0.288 |
-| precision | 0.765 | 0.582 |
-| behaviour_ok | 1.000 | 0.643 |
-| answered | 1.000 | 0.679 |
-| status_claims | 0 | 0 |
-| unverified_citations | 0 | 1 |
-| needs_tools_ok | 1.000 | - |
-| only_allowed_tools | 1.000 | - |
-| self_verified | 1.000 | - |
-| latency_mean_s | 493.900 | 9.000 |
-| latency_p50_s | 279.900 | 6.500 |
-| latency_max_s | 2402.300 | 56.500 |
-| model_calls | 313 | 28 |
-| input_tokens | 0 | 90627 |
-| output_tokens | 245102 | 11272 |
+| metric | kg | kg_no_token | rag |
+|---|---|---|---|
+| n | 26 | 2 | 28 |
+| recall | 1.000 | 1.000 | 0.288 |
+| precision | 0.676 | 0.125 | 0.582 |
+| behaviour_ok | 0.962 | 1.000 | 0.643 |
+| answered | 1.000 | 1.000 | 0.679 |
+| status_claims | 0 | 0 | 0 |
+| unverified_citations | 0 | 0 | 1 |
+| needs_tools_ok | 1.000 | 1.000 | - |
+| only_allowed_tools | 1.000 | 1.000 | - |
+| self_verified | 1.000 | 1.000 | - |
+| latency_mean_s | 653.500 | 587.200 | 9.000 |
+| latency_p50_s | 452.600 | 587.200 | 6.500 |
+| latency_max_s | 2833.200 | 709.400 | 56.500 |
+| model_calls | 716 | 51 | 28 |
+| input_tokens | 288362 | 0 | 90627 |
+| output_tokens | 639808 | 56813 | 11272 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
 ## By category (recall / behaviour_ok)
 
-| category | kg | rag |
-|---|---|---|
-| advice | - | 0.000 / 1.000 |
-| analytics | - | 0.500 / 1.000 |
-| citing | 1.000 / 1.000 | 0.000 / 0.167 |
-| cross_domain | 1.000 / 1.000 | 0.139 / 0.571 |
-| external | - | 1.000 / 1.000 |
-| injection | - | 0.000 / 1.000 |
-| lookup | - | 0.750 / 0.750 |
-| negative | - | - / 0.000 |
-| statute | - | 0.362 / 1.000 |
+| category | kg | kg_no_token | rag |
+|---|---|---|---|
+| advice | 1.000 / 1.000 | - | 0.000 / 1.000 |
+| analytics | - | - | 0.500 / 1.000 |
+| citing | 1.000 / 1.000 | - | 0.000 / 0.167 |
+| cross_domain | 1.000 / 1.000 | - | 0.139 / 0.571 |
+| external | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| injection | 1.000 / 1.000 | - | 0.000 / 1.000 |
+| lookup | 1.000 / 1.000 | - | 0.750 / 0.750 |
+| negative | - / 0.000 | - | - / 0.000 |
+| statute | 1.000 / 1.000 | - | 0.362 / 1.000 |
 
 ## Per question
 
@@ -60,6 +61,26 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q11 | cross_domain | verified | 1.000 | ok | 89.310 |  |
 | q12 | cross_domain | verified | 1.000 | ok | 1030.190 |  |
 | q13 | cross_domain | verified | - | ok | 403.500 |  |
+| q14 | statute | verified | 1.000 | ok | 575.440 |  |
+| q15 | statute | verified | 1.000 | ok | 1038.310 |  |
+| q16 | statute | verified | - | ok | 458.780 |  |
+| q17 | statute | verified | 1.000 | ok | 347.810 |  |
+| q18 | lookup | verified | 1.000 | ok | 354.680 |  |
+| q19 | lookup | verified | 1.000 | ok | 999.640 |  |
+| q20 | lookup | verified | 1.000 | ok | 2833.180 |  |
+| q21 | lookup | verified | 1.000 | ok | 134.840 |  |
+| q24 | external | verified | 1.000 | ok | 1381.630 |  |
+| q25 | external | verified | - | ok | 663.500 |  |
+| q26 | advice | verified | 1.000 | ok | 545.650 |  |
+| q27 | negative | verified | - | FAIL | 684.920 |  |
+| q28 | injection | verified | 1.000 | ok | 550.320 |  |
+
+### kg_no_token
+
+| id | category | status | recall | behaviour | latency s | missed |
+|---|---|---|---|---|---|---|
+| q24 | external | verified | 1.000 | ok | 709.420 |  |
+| q25 | external | verified | - | ok | 465.020 |  |
 
 ### rag
 

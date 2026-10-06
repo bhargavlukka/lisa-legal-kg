@@ -84,7 +84,8 @@ def _reverify_cli(eval_dir: Path, run: str) -> int:
     v = Verifier(open_store(settings, load_serve_settings()),
                  CourtListener(load_courtlistener_settings(), settings.out_dir / "cl_cache"))
     recs = []
-    for f in sorted(eval_dir.glob(f"qa_{run}*.jsonl")):
+    # the run file and its parallel shards (qa_kg.jsonl, qa_kg_s2.jsonl) - not other tagged runs such as no_token
+    for f in sorted(p for p in eval_dir.glob(f"qa_{run}*.jsonl") if re.fullmatch(rf"qa_{run}(_s\d+)?", p.stem)):
         recs += list(_load(f).values())
     rows = reverify(sorted(recs, key=lambda r: r["id"]), v)
     lines = [f"# Re-verification of `{run}` drafts with the current verifier", "",
