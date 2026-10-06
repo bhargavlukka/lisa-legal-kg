@@ -1,7 +1,7 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 26/28 questions run
+- kg: 28/28 questions run
 - kg_no_token: 2/28 questions run
 - rag: 28/28 questions run
 
@@ -9,22 +9,22 @@
 
 | metric | kg | kg_no_token | rag |
 |---|---|---|---|
-| n | 26 | 2 | 28 |
+| n | 28 | 2 | 28 |
 | recall | 1.000 | 1.000 | 0.288 |
-| precision | 0.676 | 0.125 | 0.582 |
-| behaviour_ok | 0.962 | 1.000 | 0.643 |
+| precision | 0.628 | 0.125 | 0.582 |
+| behaviour_ok | 0.964 | 1.000 | 0.643 |
 | answered | 1.000 | 1.000 | 0.679 |
 | status_claims | 0 | 0 | 0 |
 | unverified_citations | 0 | 0 | 1 |
 | needs_tools_ok | 1.000 | 1.000 | - |
 | only_allowed_tools | 1.000 | 1.000 | - |
 | self_verified | 1.000 | 1.000 | - |
-| latency_mean_s | 653.500 | 587.200 | 9.000 |
-| latency_p50_s | 452.600 | 587.200 | 6.500 |
+| latency_mean_s | 716.600 | 587.200 | 9.000 |
+| latency_p50_s | 502.200 | 587.200 | 6.500 |
 | latency_max_s | 2833.200 | 709.400 | 56.500 |
-| model_calls | 716 | 51 | 28 |
-| input_tokens | 288362 | 0 | 90627 |
-| output_tokens | 639808 | 56813 | 11272 |
+| model_calls | 789 | 51 | 28 |
+| input_tokens | 352922 | 0 | 90627 |
+| output_tokens | 738635 | 56813 | 11272 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
@@ -33,7 +33,7 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | category | kg | kg_no_token | rag |
 |---|---|---|---|
 | advice | 1.000 / 1.000 | - | 0.000 / 1.000 |
-| analytics | - | - | 0.500 / 1.000 |
+| analytics | 1.000 / 1.000 | - | 0.500 / 1.000 |
 | citing | 1.000 / 1.000 | - | 0.000 / 0.167 |
 | cross_domain | 1.000 / 1.000 | - | 0.139 / 0.571 |
 | external | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
@@ -69,6 +69,8 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q19 | lookup | verified | 1.000 | ok | 999.640 |  |
 | q20 | lookup | verified | 1.000 | ok | 2833.180 |  |
 | q21 | lookup | verified | 1.000 | ok | 134.840 |  |
+| q22 | analytics | verified | 1.000 | ok | 1858.180 |  |
+| q23 | analytics | verified | 1.000 | ok | 1217.630 |  |
 | q24 | external | verified | 1.000 | ok | 1381.630 |  |
 | q25 | external | verified | - | ok | 663.500 |  |
 | q26 | advice | verified | 1.000 | ok | 545.650 |  |

@@ -1,6 +1,6 @@
 # Re-verification of `kg` drafts with the current verifier
 
-23/26 stored drafts pass the current gate.
+25/28 stored drafts pass the current gate.
 
 | id | status in run | passes now | problems now |
 |---|---|---|---|
@@ -25,6 +25,8 @@
 | q19 | verified | yes | - |
 | q20 | verified | no | uncited_claim |
 | q21 | verified | no | unverified_quote |
+| q22 | verified | yes | - |
+| q23 | verified | yes | - |
 | q24 | verified | yes | - |
 | q25 | verified | yes | - |
 | q26 | verified | yes | - |

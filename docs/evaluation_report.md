@@ -3,7 +3,7 @@
 All numbers come from committed, reproducible runs (commands in the [README](../README.md#reproduce-the-evaluation)).
 Models, all through the SharedLLM gateway ([model_constraints.md](model_constraints.md)): extraction tier `gpt-oss:120b`
 (section 1); question answering, KG agent and RAG baseline, `~z-ai/glm-flash-latest` from the pool (sections 2-4).
-Raw reports: [eval/extraction_report.md](eval/extraction_report.md), [eval/qa_report.md](eval/qa_report.md), [eval/reverify_kg.md](eval/reverify_kg.md).
+Raw reports: [eval/extraction_report.md](eval/extraction_report.md), [eval/qa_report.md](eval/qa_report.md), [eval/reverify_kg.md](eval/reverify_kg.md), [eval/reverify_kg_no_token.md](eval/reverify_kg_no_token.md).
 
 ## 1. Knowledge-graph extraction
 
@@ -70,26 +70,26 @@ Run cost: 72 live requests + 295 cache hits for the final scoring runs; 1.48 M i
 | retrieval | Claude Agent SDK over 4 MCP servers (graph, verifier, analytics, external/CourtListener) and the `legal-research` skill | fastembed `BAAI/bge-small-en-v1.5` over page chunks, top 8 |
 | model calls / question | agent loop (12-74) | 1 |
 | gate | `verify_answer` called by the agent, then the harness gate | same gate on the single draft |
-| questions run | 26 / 28 (q22, q23 not finished in shard 2) | 28 / 28 |
+| questions run | 28 / 28 | 28 / 28 |
 
 Scoring (`src/lisa/eval/qa.py`): recall and precision count only citations in tier `verified_in_corpus` that the
-answer references by a `[n]` marker. Recall is averaged over questions with expected cases (KG 22, RAG 24),
-precision over those that also cite at least one verified case (KG 22, RAG 14). `behaviour_ok`: `answer` -> status
+answer references by a `[n]` marker. Recall is averaged over the 24 questions with expected cases, precision over
+those that also cite at least one verified case (KG 24, RAG 14). `behaviour_ok`: `answer` -> status
 verified or salvaged; `refuse` -> no in-corpus case cited; `disclaimer` -> advice disclaimer present.
 
-| metric | KG agent | RAG | RAG, same 26 ids |
-|---|---|---|---|
-| n | 26 | 28 | 26 |
-| recall | **1.000** | 0.288 | 0.269 |
-| precision | 0.676 | 0.582 | 0.596 |
-| behaviour_ok | **0.962** | 0.643 | 0.615 |
-| answered (verified or salvaged) | 1.000 | 0.679 | 0.654 |
-| unverified citations | 0 | 1 (q10) | 1 |
-| unqualified status claims | 0 | 0 | 0 |
-| latency mean / p50 / max, s | 653.5 / 452.6 / 2833.2 | 9.0 / 6.5 / 56.5 | 9.1 / 6.4 / 56.5 |
-| model calls | 716 | 28 | 26 |
+| metric | KG agent | RAG |
+|---|---|---|
+| n | 28 | 28 |
+| recall | **1.000** | 0.288 |
+| precision | 0.628 | 0.582 |
+| behaviour_ok | **0.964** | 0.643 |
+| answered (verified or salvaged) | 1.000 | 0.679 |
+| unverified citations | 0 | 1 (q10) |
+| unqualified status claims | 0 | 0 |
+| latency mean / p50 / max, s | 716.6 / 502.2 / 2833.2 | 9.0 / 6.5 / 56.5 |
+| model calls | 789 | 28 |
 
-KG statuses: 26 verified. RAG statuses: 9 verified, 10 salvaged (unsupported sentences removed), 9 refused (no
+KG statuses: 28 verified. RAG statuses: 9 verified, 10 salvaged (unsupported sentences removed), 9 refused (no
 draft passed the gate).
 
 By category (recall / behaviour_ok):
@@ -100,7 +100,7 @@ By category (recall / behaviour_ok):
 | cross_domain | 7 | 1.000 / 1.000 | 0.139 / 0.571 |
 | statute | 4 | 1.000 / 1.000 | 0.362 / 1.000 |
 | lookup | 4 | 1.000 / 1.000 | 0.750 / 0.750 |
-| analytics | 2 (KG 0) | - | 0.500 / 1.000 |
+| analytics | 2 | 1.000 / 1.000 | 0.500 / 1.000 |
 | external | 2 | 1.000 / 1.000 | 1.000 / 1.000 |
 | advice | 1 | 1.000 / 1.000 | 0.000 / 1.000 |
 | negative | 1 | - / 0.000 | - / 0.000 |
@@ -125,16 +125,21 @@ By category (recall / behaviour_ok):
   concerns patent infringement, but supports this with quotes from Allen v. Cooper and others on state sovereign
   immunity (4 verified in-corpus cases). The strict `refuse` rule (no in-corpus case cited) scores this as a failure.
   RAG fails the rule the same way (cites Allen v. Cooper).
-- *Precision 0.676:* the agent cites verified cases beyond the expected set, typically the case the question is
-  about (q01 Pereira, q04, q05, q06, q09) and supporting SCOTUS context. Lowest: q24 0.125 (1 of 8 cited cases is
-  expected), q20 0.250, q26 0.250, q10 / q12 / q21 0.333.
+- *Precision 0.628:* the agent cites verified cases beyond the expected set, typically the case the question is
+  about (q01 Pereira, q04, q05, q06, q09) and supporting SCOTUS context. Lowest: q22 0.067, q24 0.125 (1 of 8 cited
+  cases is expected), q23 0.133, q20 0.250, q26 0.250, q10 / q12 / q21 0.333.
+- *Analytics (q22, q23): right answer, diluted precision.* q22 called `most_cited_precedents` twice, then
+  `find_citing_cases` and `read_page`, and named Pereira v. Sessions (expected) as first under both PageRank and
+  in-degree with 12 citing cases - then cited those 12 citing cases plus 2 others (15 cited, P 0.067). q23 called
+  `cross_corpus_bridges` twice (39 cross-corpus edges, 15 bridged SCOTUS cases), named Pereira as the strongest bridge
+  and cited all 15 bridged cases (P 0.133); it also ran 16 `search_case_text` and 15 `read_page` calls.
 - *Open-ended questions are expensive:* q13 (SCOTUS opinions citing BIA decisions; expected: none) used 56 tool
   calls, 41 of them `search_case_text`, and 74 model calls.
-- *Latency:* mean about 70x the RAG mean (section 3).
+- *Latency:* mean about 80x the RAG mean (section 3).
 
 ## 3. Trajectory checks
 
-KG agent, n = 26 (`tools` = recorded tool-name sequence per turn).
+KG agent, n = 28 (`tools` = recorded tool-name sequence per turn).
 
 | check | rate | definition |
 |---|---|---|
@@ -143,37 +148,40 @@ KG agent, n = 26 (`tools` = recorded tool-name sequence per turn).
 | self_verified | 1.000 | the agent called `mcp__verifier__verify_answer` itself |
 
 Typical sequence: `Skill` (legal-research) -> `search_cases` -> a structural tool (`find_citing_cases`,
-`statute_frequency`, `resolve_citation`) -> `read_page` x n -> `verify_answer`. All 26 turns start with `Skill` and
-end with `verify_answer`; 22 call `verify_answer` 2-5 times (self-correction before the harness gate), 4 once.
+`statute_frequency`, `resolve_citation`) -> `read_page` x n -> `verify_answer`; the analytics questions (q22, q23)
+go from `Skill` straight to `most_cited_precedents` / `cross_corpus_bridges`. All 28 turns start with `Skill` and
+end with `verify_answer`; 23 call `verify_answer` 2-5 times (self-correction before the harness gate), 5 once.
 The harness gate sent drafts back in two turns: q21 (1 revision) and q08 (2 revisions).
 
 | tool | calls | questions using it |
 |---|---|---|
-| read_page | 191 | 26 |
-| search_case_text | 94 | 20 |
+| read_page | 213 | 28 |
+| search_case_text | 110 | 21 |
+| verify_answer | 62 | 28 |
 | search_cases | 58 | 26 |
-| verify_answer | 57 | 26 |
-| get_case | 27 | 9 |
-| Skill | 26 | 26 |
-| find_citing_cases | 19 | 16 |
+| get_case | 28 | 10 |
+| Skill | 28 | 28 |
+| find_citing_cases | 21 | 17 |
+| verify_citation | 15 | 3 |
 | find_cited_cases | 14 | 6 |
-| verify_citation | 14 | 2 |
 | statute_frequency | 6 | 5 |
 | resolve_citation | 5 | 5 |
-| other (search_opinions 2; precedent_chain, cross_corpus_bridges, most_cited_precedents, get_opinion_cluster, get_docket, quota_status 1 each) | 8 | - |
-| total | 519 | |
+| cross_corpus_bridges | 3 | 2 |
+| most_cited_precedents | 3 | 2 |
+| other (search_opinions 2; precedent_chain, get_opinion_cluster, get_docket, quota_status 1 each) | 6 | - |
+| total | 572 | |
 
 | per question | mean | p25 | p50 | p75 | min | max |
 |---|---|---|---|---|---|---|
-| tool calls | 20.0 | 12 | 18.5 | 25.25 | 7 (q05) | 56 (q13) |
-| model calls | 27.5 | - | 28 | - | 12 | 74 (q13) |
-| latency, s | 653.5 | 234 | 453 | 764 | 79.3 (q03) | 2833.2 (q20) |
+| tool calls | 20.4 | 12.25 | 18.5 | 25.75 | 7 (q05) | 56 (q13) |
+| model calls | 28.2 | - | 28 | - | 12 | 74 (q13) |
+| latency, s | 716.6 | 246 | 502 | 1023 | 79.3 (q03) | 2833.2 (q20) |
 
-8 turns finished under 300 s; 5 took over 1000 s (q08 2402, q12 1030, q15 1038, q20 2833, q24 1382).
-Latency caveats: the KG run was sharded 3-way in parallel (q01-q18, q19-q23, q24-q28) on the shared gateway, so
-per-turn latency is inflated by load. q08's 2402 s includes a gzip / `ZlibError` retry episode on the gateway's
-padded responses, fixed afterwards (`Accept-Encoding: identity`, [model_constraints.md](model_constraints.md)).
-Without q08 the mean is 583.5 s.
+8 turns finished under 300 s; 7 took over 1000 s (q08 2402, q12 1030, q15 1038, q20 2833, q22 1858, q23 1218,
+q24 1382). Latency caveats: the KG run was sharded 3-way in parallel (q01-q18, q19-q23, q24-q28) on the shared
+gateway, so per-turn latency is inflated by load. q08's 2402 s includes a gzip / `ZlibError` retry episode on the
+gateway's padded responses, fixed afterwards (`Accept-Encoding: identity`, [model_constraints.md](model_constraints.md)).
+Without q08 the mean is 654.2 s.
 
 ## 4. Robustness, integrity and constraints
 
@@ -208,8 +216,8 @@ After the runs the verifier was hardened (code review plus 5 automated security-
 are checked and attributed to their own marker, bracket alterations are limited to case changes, ellipsis gaps are
 bounded, matching is ReDoS-safe, unused citations are flagged, and external citations get quote and name checks.
 `scripts/eval_qa.py --reverify kg` re-runs the current verifier on every stored draft
-([eval/reverify_kg.md](eval/reverify_kg.md)): **25 / 28** pass. The 28 drafts are the 26 KG drafts plus the 2
-`kg_no_token` drafts (the file glob `qa_kg*.jsonl` includes the no-token run), i.e. 23 / 26 KG and 2 / 2 no-token.
+([eval/reverify_kg.md](eval/reverify_kg.md)): **25 / 28** KG drafts pass; `--reverify kg_no_token`
+([eval/reverify_kg_no_token.md](eval/reverify_kg_no_token.md)): **2 / 2** pass.
 
 | id | problem now | cause | assessment |
 |---|---|---|---|
@@ -237,10 +245,10 @@ bounded, matching is ReDoS-safe, unused citations are flagged, and external cita
 
 | run | model calls | input tokens | output tokens |
 |---|---|---|---|
-| KG agent (26 q) | 716 | 288,362 (reported for 4 of 26 turns) | 639,808 |
+| KG agent (28 q) | 789 | 352,922 (reported for 5 of 28 turns) | 738,635 |
 | KG no-token (2 q) | 51 | not reported | 56,813 |
 | RAG (28 q) | 28 | 90,627 | 11,272 |
 
 The gateway mostly does not report input-token usage on the Anthropic-compatible route the agent uses (input = 0
-in 22 of 26 KG records; non-zero for q15, q19, q20, q24), so the KG input total is a lower bound. The RAG baseline
+in 23 of 28 KG records; non-zero for q15, q19, q20, q22, q24), so the KG input total is a lower bound. The RAG baseline
 uses the OpenAI-compatible route, which reports both.
