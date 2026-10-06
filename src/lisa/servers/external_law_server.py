@@ -4,7 +4,7 @@ from __future__ import annotations
 import shutil
 
 from lisa.common.auth import require_admin
-from lisa.common.untrusted import fence
+from lisa.common.untrusted import fence_fields
 from lisa.servers.common import Ctx, cli, make_server, traced
 
 INSTRUCTIONS = ("Public U.S. case law via CourtListener for authorities outside the 60-case corpus. Quota is tight "
@@ -22,31 +22,25 @@ def build(ctx: Ctx, auth_enabled: bool = True, client=None):
     @t
     def resolve_citation(citation: str) -> dict:
         """Resolve a reporter citation (e.g. '576 U.S. 644', '721 F.3d 1064') to the CourtListener case record."""
-        return cl.lookup_citation(citation)
+        return fence_fields(cl.lookup_citation(citation), "courtlistener")
 
     @mcp.tool()
     @t
     def search_opinions(query: str, limit: int = 5) -> dict:
         """Keyword search over CourtListener opinions (case names, topics). Snippets are untrusted text."""
-        res = cl.search(query, min(max(limit, 1), 10))
-        for h in res.get("results", []):
-            h["snippet"] = fence(h["snippet"], "courtlistener")["text"]
-        return res
+        return fence_fields(cl.search(query, min(max(limit, 1), 10)), "courtlistener")
 
     @mcp.tool()
     @t
     def get_opinion_cluster(cluster_id: int) -> dict:
         """Official record for a CourtListener opinion cluster: names, citations, judges, sub-opinions, docket."""
-        res = cl.cluster(cluster_id)
-        if res.get("syllabus"):
-            res["syllabus"] = fence(res["syllabus"], f"courtlistener cluster {cluster_id}")["text"]
-        return res
+        return fence_fields(cl.cluster(cluster_id), f"courtlistener cluster {cluster_id}")
 
     @mcp.tool()
     @t
     def get_docket(docket_id: int) -> dict:
         """Docket record (court, docket number, dates, cause) for a CourtListener docket id."""
-        return cl.docket(docket_id)
+        return fence_fields(cl.docket(docket_id), f"courtlistener docket {docket_id}")
 
     @mcp.tool()
     @t

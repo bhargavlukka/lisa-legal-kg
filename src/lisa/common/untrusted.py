@@ -25,3 +25,16 @@ def fence(text: str, source: str) -> dict:
     if f := flags(text):
         out["injection_flags"] = f
     return out
+
+
+TEXT_FIELDS = ("quote", "snippet", "syllabus", "case_name", "caption", "cause", "nature_of_suit")
+
+
+def fence_fields(obj, source: str, keys: tuple[str, ...] = TEXT_FIELDS):
+    """Copy of a tool result with every free-text field named in `keys` fenced, at any depth."""
+    if isinstance(obj, dict):
+        return {k: fence(v, source)["text"] if k in keys and isinstance(v, str) and v
+                else fence_fields(v, source, keys) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [fence_fields(v, source, keys) for v in obj]
+    return obj

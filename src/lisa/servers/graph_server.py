@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from lisa.common.auth import require_admin
-from lisa.common.untrusted import fence
+from lisa.common.untrusted import fence, fence_fields
 from lisa.servers.common import Ctx, cli, make_server, traced
 
 INSTRUCTIONS = ("Knowledge graph of 60 cases: 30 BIA/AG immigration decisions and 30 U.S. Supreme Court opinions. "
@@ -26,7 +26,7 @@ def build(ctx: Ctx, auth_enabled: bool = True):
     def search_cases(query: str, domain: str | None = None, limit: int = 8) -> dict:
         """Find corpus cases by name, citation, docket or topic words. domain: immigration | litigation | null.
         Returns case_id, title, citation, best matching page and a snippet."""
-        return {"results": store.search_cases(query, domain, min(max(limit, 1), 25))}
+        return fence_fields({"results": store.search_cases(query, domain, min(max(limit, 1), 25))}, "corpus")
 
     @mcp.tool()
     @t
@@ -61,7 +61,7 @@ def build(ctx: Ctx, auth_enabled: bool = True):
         """Corpus cases that cite this case (CITES / FOLLOWS / DISTINGUISHES / OVERRULES) with page evidence,
         provenance (deterministic | llm | unverified) and confidence."""
         cid = _need(case_id)
-        return {"case_id": cid, "citing": store.find_citing(cid)}
+        return fence_fields({"case_id": cid, "citing": store.find_citing(cid)}, "corpus edge evidence")
 
     @mcp.tool()
     @t
@@ -69,7 +69,8 @@ def build(ctx: Ctx, auth_enabled: bool = True):
         """Authorities this case cites (corpus cases and external authorities) with evidence and provenance."""
         cid = _need(case_id)
         cited = store.find_cited(cid, in_corpus_only)
-        return {"case_id": cid, "count": len(cited), "cited": cited[:80], "truncated": len(cited) > 80}
+        return fence_fields({"case_id": cid, "count": len(cited), "cited": cited[:80], "truncated": len(cited) > 80},
+                            "corpus edge evidence")
 
     @mcp.tool()
     @t
@@ -77,7 +78,8 @@ def build(ctx: Ctx, auth_enabled: bool = True):
         """Shortest citation paths from a case to in-corpus authorities (default: Supreme Court opinions).
         Each hop carries edge type, provenance, confidence and a page-anchored quote."""
         cid = _need(case_id)
-        return {"case_id": cid, "chains": store.precedent_chain(cid, min(max(max_depth, 1), 5), to_domain)}
+        return fence_fields({"case_id": cid, "chains": store.precedent_chain(cid, min(max(max_depth, 1), 5), to_domain)},
+                            "corpus edge evidence")
 
     @mcp.tool()
     @t
