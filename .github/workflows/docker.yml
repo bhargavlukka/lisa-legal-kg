@@ -1,0 +1,75 @@
+# Builds both images and runs the compose stack live on a GitHub runner, against a synthetic corpus (the real case
+# package never leaves the developer machine). Unit tests run first.
+name: docker-stack
+
+on:
+  push:
+    branches: [main, phase3-mcp-servers]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+
+      - name: Install and unit-test
+        run: |
+          python -m pip install -e ".[dev,agent,rag]"
+          python -m pytest -q
+
+      - name: Synthetic corpus, graph build and throwaway secrets
+        run: |
+          python scripts/ci_synthetic_data.py "$RUNNER_TEMP/lisa_data"
+          {
+            echo "LISA_DATA_DIR=$RUNNER_TEMP/lisa_data"
+            echo "NEO4J_PASSWORD=$(python -c 'import secrets;print(secrets.token_hex(12))')"
+            echo "LISA_AUTH_SECRET=$(python -c 'import secrets;print(secrets.token_hex(32))')"
+            echo "SHAREDLLM_API_KEY=sk-sharedllm-ci-dummy"
+          } > .env
+          set -a; . ./.env; set +a
+          python scripts/build_graph.py --dataset all --check --no-load
+          echo "LISA_AGENT_TOKEN=$(python scripts/issue_token.py lisa-agent researcher)" >> .env
+          cat .env | sed 's/=.*/=***/'
+
+      - name: docker compose config + build
+        run: |
+          docker compose --env-file .env config --quiet
+          docker compose --env-file .env build
+          docker compose --env-file .env --profile agent build agent
+
+      - name: docker compose up (neo4j, jaeger, four MCP servers)
+        run: |
+          docker compose --env-file .env up -d
+          sleep 20
+          docker compose --env-file .env ps
+
+      - name: Smoke test over HTTP (auth, roles, tools, degradation)
+        run: |
+          set -a; . ./.env; set +a
+          python scripts/ci_smoke.py
+
+      - name: Neo4j load + graph server on the neo4j backend
+        run: |
+          set -a; . ./.env; set +a
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:7474 >/dev/null && break; sleep 3; done
+          NEO4J_URI=bolt://127.0.0.1:7687 python scripts/load_neo4j.py
+          LISA_GRAPH_BACKEND=neo4j docker compose --env-file .env up -d graph
+          sleep 10
+          python scripts/ci_smoke.py
+
+      - name: Agent image starts
+        run: docker compose --env-file .env run --rm agent --help
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --env-file .env logs --tail 80
+
+      - name: Down
+        if: always()
+        run: docker compose --env-file .env down -v
