@@ -92,7 +92,7 @@ def sdk_env(agent: AgentSettings) -> dict:
     # key as the bearer: so the CLI authenticates with ANTHROPIC_AUTH_TOKEN, never ANTHROPIC_API_KEY.
     return {"ANTHROPIC_BASE_URL": agent.base_url, "ANTHROPIC_AUTH_TOKEN": agent.provider_key or agent.gateway_key,
             "ANTHROPIC_API_KEY": "",
-            "ANTHROPIC_CUSTOM_HEADERS": f"X-SharedLLM-Key: {agent.gateway_key}",
+            "ANTHROPIC_CUSTOM_HEADERS": f"X-SharedLLM-Key: {agent.gateway_key}\nAccept-Encoding: identity",
             "ANTHROPIC_MODEL": m, "ANTHROPIC_DEFAULT_HAIKU_MODEL": m, "ANTHROPIC_DEFAULT_SONNET_MODEL": m,
             "ANTHROPIC_DEFAULT_OPUS_MODEL": m, "CLAUDE_CODE_SUBAGENT_MODEL": m,
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1", "CLAUDECODE": ""}

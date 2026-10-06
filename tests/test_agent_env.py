@@ -13,7 +13,8 @@ def _s(provider_key=None, gateway_key="sk-sharedllm-x"):
 def test_pure_sharedllm_sends_only_the_virtual_key():
     env = sdk_env(_s())
     assert env["ANTHROPIC_BASE_URL"] == "https://api.sharedllm.com/anthropic"
-    assert env["ANTHROPIC_CUSTOM_HEADERS"] == "X-SharedLLM-Key: sk-sharedllm-x"
+    # gateway replies are whitespace-padded, which breaks gzip in the CLI ("Decompression error: ZlibError")
+    assert env["ANTHROPIC_CUSTOM_HEADERS"] == "X-SharedLLM-Key: sk-sharedllm-x\nAccept-Encoding: identity"
     # x-api-key is forwarded upstream as a provider key (401); the gateway accepts its own key as the bearer
     assert env["ANTHROPIC_AUTH_TOKEN"] == "sk-sharedllm-x" and env["ANTHROPIC_API_KEY"] == ""
     assert env["ANTHROPIC_MODEL"] == env["CLAUDE_CODE_SUBAGENT_MODEL"] == "z-ai/glm-flash-latest"
