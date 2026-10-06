@@ -62,6 +62,12 @@ class Trajectory:
     input_tokens: int = 0
     output_tokens: int = 0
     calls: dict = field(default_factory=dict)     # API message id -> (input_tokens, output_tokens)
+    passes: list = field(default_factory=list)    # ResultMessage usage per query() pass (first draft, revisions)
+
+    def tally(self) -> None:
+        """Token totals: per-call sums, or the summed per-pass totals when those are larger (missing call usage)."""
+        self.input_tokens = max(sum(c[0] for c in self.calls.values()), sum(p[0] for p in self.passes))
+        self.output_tokens = max(sum(c[1] for c in self.calls.values()), sum(p[1] for p in self.passes))
 
     def names(self) -> list[str]:
         return [t["name"] for t in self.tools]
@@ -203,17 +209,16 @@ class ResearchAgent:
                         traj.model_calls += 1
                     traj.calls[key] = (max(int(u.get("input_tokens") or 0), prev[0] if prev else 0),
                                        max(int(u.get("output_tokens") or 0), prev[1] if prev else 0))
-                    traj.input_tokens = sum(c[0] for c in traj.calls.values())
-                    traj.output_tokens = sum(c[1] for c in traj.calls.values())
+                    traj.tally()
                     if m.parent_tool_use_id is None:
                         txt = "".join(b.text for b in m.content if isinstance(b, TextBlock))
                         last = txt or last
                 elif isinstance(m, ResultMessage):
                     sdk_id = m.session_id
                     final = m.result or last
-                    u = m.usage or {}                  # turn totals; per-message usage can be missing via the gateway
-                    traj.input_tokens = max(traj.input_tokens, int(u.get("input_tokens") or 0))
-                    traj.output_tokens = max(traj.output_tokens, int(u.get("output_tokens") or 0))
+                    u = m.usage or {}                  # this pass's totals; per-message usage can be missing upstream
+                    traj.passes.append((int(u.get("input_tokens") or 0), int(u.get("output_tokens") or 0)))
+                    traj.tally()
             return final or last
 
         with span("agent.ask", question=question, session=memory.name if memory else None) as sp:

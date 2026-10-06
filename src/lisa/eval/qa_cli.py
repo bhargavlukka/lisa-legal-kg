@@ -113,7 +113,8 @@ def run_kg(questions: list[dict], path: Path) -> int:
         rec = {"id": q["id"], "system": "kg", "status": r.status, "text": r.text, "draft": r.draft,
                "report": r.report, "latency_s": round(r.latency_s, 2), "input_tokens": r.trajectory.input_tokens,
                "output_tokens": r.trajectory.output_tokens, "model_calls": r.trajectory.model_calls,
-               "tools": r.trajectory.names(), "revisions": r.revisions, "gate_calls": r.gate_calls}
+               "tools": r.trajectory.names(), "revisions": r.revisions, "gate_calls": r.gate_calls,
+               "sdk_session_id": r.sdk_session_id}
         why = model_failed(rec)
         if why:
             # the model path failed (quota, 429, outage), possibly mid-turn: not a result - stop so a rerun resumes

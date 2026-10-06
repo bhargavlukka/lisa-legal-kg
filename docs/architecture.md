@@ -82,7 +82,9 @@ per-minute/hour/day quota ledger, and exponential backoff honouring `Retry-After
 
 `ResearchAgent.ask` runs one research turn with the Claude Agent SDK pointed at the SharedLLM Anthropic-compatible
 route (`/anthropic`, model `~z-ai/glm-flash-latest`); the CLI authenticates with the virtual key as bearer plus
-`X-SharedLLM-Key` (`sdk_env`). Wired in: the `legal-research` skill
+`X-SharedLLM-Key` (`sdk_env`). By default the CLI reaches the gateway through a local metering proxy
+(`agent/usage_proxy.py`) that records exact token usage per model call, which the gateway omits on streamed
+replies. Wired in: the `legal-research` skill
 (`agent/.claude/skills/legal-research/SKILL.md`), the `citation-chaser` subagent
 (`agent/subagents/citation_chaser.py`), a PreToolUse hook that denies anything outside the MCP tool allowlist and records the trajectory, and `SessionMemory` (`out/sessions/<name>.json` digest + SDK session resume),
 so a session survives restarts.

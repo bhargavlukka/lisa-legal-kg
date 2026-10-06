@@ -92,3 +92,14 @@ def test_cost_per_query_and_missing_input_count():
     assert s["cost_total_usd"] == 1.02 and s["cost_per_query_usd"] == 0.51 and s["input_tokens_missing"] == 1
     assert "| cost_per_query_usd | $0.510000 |" in render_markdown({"kg": s}, {"kg": rows})
     assert "cost_per_query_usd" not in aggregate(rows)
+
+
+def test_message_start_carries_final_usage_and_revision_passes_are_summed():
+    from lisa.agent.agent import Trajectory
+    start = parse(sse_events(MSG))[0][1]["message"]["usage"]
+    assert start == {"input_tokens": 171, "output_tokens": 41}   # the CLI snapshots usage before message_delta
+    t = Trajectory()
+    t.calls = {"m1": (100, 0), "m2": (200, 0)}                   # per-call output missing
+    t.passes = [(100, 30), (200, 50)]                            # first draft + one revision
+    t.tally()
+    assert (t.input_tokens, t.output_tokens) == (300, 80)

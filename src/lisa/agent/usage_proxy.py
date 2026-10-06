@@ -27,7 +27,8 @@ def sse_events(msg: dict) -> list[bytes]:
     usage = dict(msg.get("usage") or {})
     head = {k: v for k, v in msg.items() if k not in ("content", "stop_reason", "stop_sequence", "usage")}
     out = [_sse("message_start", {"type": "message_start", "message": {
-        **head, "content": [], "stop_reason": None, "stop_sequence": None, "usage": {**usage, "output_tokens": 0}}})]
+        **head, "content": [], "stop_reason": None, "stop_sequence": None, "usage": usage}})]
+    # full usage already in message_start: the CLI snapshots usage per content block, before message_delta arrives
     for i, b in enumerate(msg.get("content") or []):
         t = b.get("type")
         if t == "text":
