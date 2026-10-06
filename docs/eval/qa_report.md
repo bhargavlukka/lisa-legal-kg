@@ -1,16 +1,16 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 5/28 questions run
+- kg: 8/28 questions run
 - rag: 28/28 questions run
 
 ## Summary
 
 | metric | kg | rag |
 |---|---|---|
-| n | 5 | 28 |
+| n | 8 | 28 |
 | recall | 1.000 | 0.288 |
-| precision | 0.902 | 0.479 |
+| precision | 0.846 | 0.479 |
 | behaviour_ok | 1.000 | 0.643 |
 | answered | 1.000 | 0.679 |
 | status_claims | 0 | 0 |
@@ -18,12 +18,12 @@
 | needs_tools_ok | 1.000 | - |
 | only_allowed_tools | 1.000 | - |
 | self_verified | 1.000 | - |
-| latency_mean_s | 257.400 | 9.000 |
-| latency_p50_s | 232.100 | 6.500 |
-| latency_max_s | 574.100 | 56.500 |
-| model_calls | 89 | 28 |
+| latency_mean_s | 546.300 | 9.000 |
+| latency_p50_s | 257.200 | 6.500 |
+| latency_max_s | 2402.300 | 56.500 |
+| model_calls | 152 | 28 |
 | input_tokens | 0 | 90627 |
-| output_tokens | 85935 | 11272 |
+| output_tokens | 135189 | 11272 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
@@ -34,7 +34,7 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | advice | - | 0.000 / 1.000 |
 | analytics | - | 0.500 / 1.000 |
 | citing | 1.000 / 1.000 | 0.000 / 0.167 |
-| cross_domain | - | 0.139 / 0.571 |
+| cross_domain | 1.000 / 1.000 | 0.139 / 0.571 |
 | external | - | 1.000 / 1.000 |
 | injection | - | 0.000 / 1.000 |
 | lookup | - | 0.750 / 0.750 |
@@ -52,6 +52,9 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q03 | citing | verified | 1.000 | ok | 79.300 |  |
 | q04 | citing | verified | 1.000 | ok | 121.830 |  |
 | q05 | citing | verified | 1.000 | ok | 279.850 |  |
+| q06 | citing | verified | 1.000 | ok | 234.470 |  |
+| q07 | cross_domain | verified | 1.000 | ok | 446.400 |  |
+| q08 | cross_domain | verified | 1.000 | ok | 2402.300 |  |
 
 ### rag
 
