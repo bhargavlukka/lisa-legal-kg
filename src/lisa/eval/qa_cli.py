@@ -157,9 +157,11 @@ def report(eval_dir: Path, golden: list[dict]) -> Path:
     allowed = set(MCP_TOOLS + META_TOOLS)
     by_id = {q["id"]: q for q in golden}
     summary, rows = {}, {}
+    runs: dict[str, dict] = {}
     for path in sorted(eval_dir.glob("qa_*.jsonl")):
-        name = path.stem[3:]
-        recs = _load(path)
+        name = re.sub(r"_s\d+$", "", path.stem[3:])               # parallel shards (qa_kg_s2) belong to their system
+        runs.setdefault(name, {}).update(_load(path))
+    for name, recs in runs.items():
         rows[name] = [score(by_id[i], recs[i], allowed) for i in by_id if i in recs]
         summary[name] = aggregate(rows[name])
     notes = [f"golden set: {len(golden)} questions ({GOLDEN.relative_to(REPO_ROOT).as_posix()})"]

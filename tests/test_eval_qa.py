@@ -156,3 +156,12 @@ def test_reverify_reruns_the_current_gate_on_stored_drafts(graph_all):
     rows = reverify([ok, fake, {"id": "q3", "status": "refused", "draft": None}], v)
     assert [(r["id"], r["passed_now"]) for r in rows] == [("q1", True), ("q2", False)]
     assert "unverified_quote" in rows[1]["new_problems"]
+
+
+def test_report_merges_parallel_shards_into_one_system(tmp_path):
+    golden = load_golden(qa_cli.GOLDEN)[:2]
+    eval_dir = tmp_path / "eval"
+    qa_cli._append(eval_dir / "qa_kg.jsonl", {"id": golden[0]["id"], **rec()})
+    qa_cli._append(eval_dir / "qa_kg_s2.jsonl", {"id": golden[1]["id"], **rec()})
+    text = qa_cli.report(eval_dir, golden).read_text(encoding="utf-8")
+    assert "kg: 2/2 questions run" in text and "kg_s2" not in text

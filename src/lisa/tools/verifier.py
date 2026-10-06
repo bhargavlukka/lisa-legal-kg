@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from lisa.extract.verify import _ELLIPSIS, MAX_PIECES, MIN_QUOTE, PageIndex, squash
+from lisa.extract.verify import _ELLIPSIS, MAX_PIECES, MAX_STARTS, MIN_QUOTE, PageIndex, squash
 from lisa.graph.canon import canon
 from lisa.store.memory import STATUS
 
@@ -154,13 +154,30 @@ class Verifier:
         segs = [seg for seg in segs if seg]
         if not segs or len(segs) > MAX_PIECES or sum(len(squash(ALTERATION.sub("", s))) for s in segs) < MIN_QUOTE:
             return False
-        pat = re.compile((r".{0,%d}?" % MAX_ELLIPSIS_GAP).join(_alteration_pattern(s) for s in segs), re.S)
+        # sequential search, not one regex with lazy gaps (that backtracks exponentially): each segment pattern is a
+        # literal with per-letter classes (linear), the first segment tried at most MAX_STARTS times
+        pats = [re.compile(_alteration_pattern(s)) for s in segs]
         for c in cids:
             pages = [squash(t) for _, t in sorted(self.store.pages.get(c, {}).items())]
-            windows = pages + [a + b for a, b in zip(pages, pages[1:])]
-            if any(pat.search(w) for w in windows):
+            if any(_chain(pats, w) for w in pages + [a + b for a, b in zip(pages, pages[1:])]):
                 return True
         return False
+
+
+def _chain(pats: list[re.Pattern], text: str) -> bool:
+    """pats[0] somewhere in text, then each next pattern within MAX_ELLIPSIS_GAP characters of the previous match."""
+    for tries, first in enumerate(pats[0].finditer(text)):
+        if tries >= MAX_STARTS:
+            return False
+        pos = first.end()
+        for pt in pats[1:]:
+            m = pt.search(text, pos, pos + MAX_ELLIPSIS_GAP + len(pt.pattern))
+            if not m:
+                break
+            pos = m.end()
+        else:
+            return True
+    return False
 
 
 def _alteration_pattern(seg: str) -> str:

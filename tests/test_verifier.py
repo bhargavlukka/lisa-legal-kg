@@ -243,3 +243,14 @@ def test_alteration_path_keeps_ellipsis_order_and_gap_limit(graph_all):
               "[a]sylum is granted to the other applicant . . . The Board has jurisdiction"]:     # also far apart
         r = v.verify_answer(f'The Board said "{q}" [1].', CIT)
         assert "unverified_quote" in {p["kind"] for p in r["problems"]}, q
+
+
+def test_alteration_matching_is_linear_on_adversarial_pages(graph_all):
+    import time
+    store = MemoryStore([graph_all])
+    store.pages["eoir_1"][2] += "\n" + "ab " * 30000
+    v = Verifier(store)
+    q = " . . . ".join(["[a]b ab ab"] * 12)
+    t = time.perf_counter()
+    v.verify_answer(f'The Board said "{q} zz" [1].', CIT)
+    assert time.perf_counter() - t < 3.0
