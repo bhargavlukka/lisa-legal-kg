@@ -16,13 +16,25 @@ READ, ADMIN = "lisa:read", "lisa:admin"
 ROLES = {"researcher": [READ], "admin": [READ, ADMIN]}
 
 
+MIN_SECRET = 32
+
+
 class AuthError(PermissionError):
     pass
 
 
-def issue_token(auth: AuthSettings, subject: str, role: str, ttl_s: int | None = None) -> str:
-    if not auth.secret:
+def _require_strong_secret(auth: AuthSettings) -> None:
+    """HS256 is only as strong as the shared secret: refuse unset, short, or copied-from-the-example secrets."""
+    s = auth.secret or ""
+    if not s:
         raise AuthError("LISA_AUTH_SECRET is not set")
+    if len(s) < MIN_SECRET or s.upper().startswith("REPLACE") or "change-me" in s.lower():
+        raise AuthError(f"LISA_AUTH_SECRET is weak or a placeholder: use >= {MIN_SECRET} random characters "
+                        "(python -c \"import secrets; print(secrets.token_hex(32))\")")
+
+
+def issue_token(auth: AuthSettings, subject: str, role: str, ttl_s: int | None = None) -> str:
+    _require_strong_secret(auth)
     if role not in ROLES:
         raise AuthError(f"unknown role {role!r}; expected one of {sorted(ROLES)}")
     now = int(time.time())
@@ -33,8 +45,7 @@ def issue_token(auth: AuthSettings, subject: str, role: str, ttl_s: int | None =
 
 def decode_token(auth: AuthSettings, token: str) -> dict:
     """Claims of a valid token; raises AuthError on bad signature, expiry, wrong issuer/audience or role."""
-    if not auth.secret:
-        raise AuthError("LISA_AUTH_SECRET is not set")
+    _require_strong_secret(auth)
     try:
         claims = jwt.decode(token, auth.secret, algorithms=["HS256"], audience=auth.audience, issuer=auth.issuer,
                             options={"require": ["exp", "iat", "sub", "aud", "iss"]})

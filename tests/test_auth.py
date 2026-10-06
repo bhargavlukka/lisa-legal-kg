@@ -55,3 +55,12 @@ def test_untrusted_fence_and_injection_flags():
     assert out["text"].count(">>>") == 1                        # embedded fence closer defanged
     assert "ignore previous instructions" in out["injection_flags"]
     assert flags("The Board held the respondent removable.") == []
+
+
+@pytest.mark.parametrize("secret", ["short-secret", "REPLACE-WITH-64-RANDOM-CHARS" + "x" * 40, "change-me-" * 5])
+def test_weak_or_placeholder_secrets_are_refused(secret):
+    weak = AuthSettings("lisa-auth", "lisa-mcp", 60, secret)
+    with pytest.raises(AuthError, match="LISA_AUTH_SECRET"):
+        issue_token(weak, "a", "researcher")
+    with pytest.raises(AuthError, match="LISA_AUTH_SECRET"):
+        decode_token(weak, "x.y.z")
