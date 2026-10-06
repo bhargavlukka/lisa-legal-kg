@@ -171,7 +171,7 @@ def load_serve_settings(config_dir: Path = CONFIG_DIR) -> ServeSettings:
                          llm_graphs=tuple(s.get("llm_graphs") or ()),
                          backend=os.environ.get("LISA_GRAPH_BACKEND") or s.get("backend", "memory"),
                          host=os.environ.get("LISA_HOST") or s.get("host", "127.0.0.1"),
-                         ports={k: int(v) for k, v in ports.items()})
+                         ports={k: int(os.environ.get(f"LISA_{k.upper()}_PORT") or v) for k, v in ports.items()})
 
 
 def load_auth_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> AuthSettings:

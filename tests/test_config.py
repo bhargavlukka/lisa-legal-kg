@@ -87,3 +87,10 @@ def test_llm_settings_sharedllm_byok_reads_both_keys(monkeypatch, tmp_path):
     monkeypatch.setenv("SHAREDLLM_API_KEY", "gw")
     s = load_llm_settings(config_dir=tmp_path, env_file=None)
     assert (s.auth, s.api_key, s.provider_key, s.provider_key_env) == ("sharedllm_byok", "gw", "prov", "OLLAMA_API_KEY")
+
+
+def test_server_ports_can_be_overridden_per_server_from_the_environment(monkeypatch):
+    from lisa.common.config import load_serve_settings
+    monkeypatch.setenv("LISA_EXTERNAL_PORT", "8114")
+    p = load_serve_settings().ports
+    assert p["external"] == 8114 and p["graph"] == 8101
