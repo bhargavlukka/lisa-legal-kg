@@ -107,3 +107,12 @@ def test_external_citation_cannot_carry_an_unchecked_quote_or_a_wrong_name(graph
     assert wrong["tier"] == UNVERIFIED and "name" in wrong["reason"]
     quoted = ok.verify_citation("593 U.S. 155", "a quotation the external source text was never checked for", 3)
     assert quoted["tier"] == UNVERIFIED and "quote" in quoted["reason"]
+
+
+def test_quoted_terms_are_not_quotations_and_bracket_alterations_match(v):
+    term = v.verify_answer('The Board applied "Chevron deference" and the "categorical approach" here [1].', CIT)
+    assert term["passed"], term["problems"]
+    altered = v.verify_answer("The Board noted that \u201c(2018), [t]he notice was defective\u201d [1].", CIT)
+    assert altered["passed"], altered["problems"]
+    fake = v.verify_answer("The Board noted that \u201c(2018), [t]he notice was perfectly valid\u201d [1].", CIT)
+    assert "unverified_quote" in {p["kind"] for p in fake["problems"]}

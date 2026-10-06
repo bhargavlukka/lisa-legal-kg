@@ -27,6 +27,7 @@ LEGAL_CUES = re.compile(r"\b(held|holds|holding|ruled|rules|concluded|decided|fo
 CASE_CITE = re.compile(r"\b\d{1,3}\s+(?:I&N\s*Dec\.|U\.\s?S\.|S\.\s?Ct\.|F\.\s?(?:2d|3d|4th)|F\.\s?Supp\.)\s*\d{1,4}\b")
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 QUOTED = re.compile(r"[\"“]([^\"“”]+)[\"”]")          # a quotation in the answer prose
+QUOTE_MIN_WORDS = 5                                     # shorter quoted spans are terms, not quotations
 NAME_STOP = {"matter", "united", "states", "the", "and", "rel."}
 EXEMPT = re.compile(r"^\s*(#|\*\*?(provenance|sources|citations|disclaimer)|provenance|sources?:|disclaimer|note:|"
                     r"this is (legal )?research|i (could|did) not find|no (case|result))", re.I)
@@ -105,6 +106,12 @@ class Verifier:
                 if not MARKER.search(s):
                     problems.append({"kind": "uncited_case_reference", "cite": m.group(0)})
             for q in QUOTED.findall(s):
+                # a quoted term ("Chevron deference") is not a quotation; bracketed alterations ("[b]ut") are
+                # standard legal quoting ("[b]ut", "treat[]"): an alteration is a gap, like an ellipsis - the pieces
+                # around it must each be on the page, in order
+                q = re.sub(r"\[[^\]]{0,40}\]", " ... ", q)
+                if len(q.split()) < QUOTE_MIN_WORDS:
+                    continue
                 if len(squash(q)) >= MIN_QUOTE and not self._quote_on_cited_page(q, s, results):
                     problems.append({"kind": "unverified_quote", "quote": q[:200]})
             if STATUS_CLAIM.search(s) and not STATUS_QUALIFIER.search(s):

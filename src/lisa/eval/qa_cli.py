@@ -62,6 +62,42 @@ def model_failed(rec: dict) -> str | None:
     return None
 
 
+def reverify(records: list[dict], verifier) -> list[dict]:
+    """Re-run the current verifier on each stored draft (the gate may have been hardened after the run)."""
+    rows = []
+    for r in records:
+        d = r.get("draft") or {}
+        if not d.get("parsed"):
+            continue
+        rep = verifier.verify_answer(d.get("answer") or "", d.get("citations") or [])
+        rows.append({"id": r["id"], "status_then": r.get("status"), "passed_now": rep["passed"],
+                     "new_problems": sorted({p["kind"] for p in rep["problems"]})})
+    return rows
+
+
+def _reverify_cli(eval_dir: Path, run: str) -> int:
+    from lisa.common.config import load_courtlistener_settings, load_serve_settings
+    from lisa.common.courtlistener import CourtListener
+    from lisa.store import open_store
+    from lisa.tools.verifier import Verifier
+    settings = load_settings()
+    v = Verifier(open_store(settings, load_serve_settings()),
+                 CourtListener(load_courtlistener_settings(), settings.out_dir / "cl_cache"))
+    recs = []
+    for f in sorted(eval_dir.glob(f"qa_{run}*.jsonl")):
+        recs += list(_load(f).values())
+    rows = reverify(sorted(recs, key=lambda r: r["id"]), v)
+    lines = [f"# Re-verification of `{run}` drafts with the current verifier", "",
+             f"{sum(r['passed_now'] for r in rows)}/{len(rows)} stored drafts pass the current gate.", "",
+             "| id | status in run | passes now | problems now |", "|---|---|---|---|"]
+    lines += [f"| {r['id']} | {r['status_then']} | {'yes' if r['passed_now'] else 'no'} | "
+              f"{', '.join(r['new_problems']) or '-'} |" for r in rows]
+    out = eval_dir / f"reverify_{run}.md"
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"reverify: {out}")
+    return 0
+
+
 def run_kg(questions: list[dict], path: Path) -> int:
     import anyio
 
@@ -142,11 +178,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--redo", action="store_true", help="rerun questions already in the run file")
     ap.add_argument("--max-requests", type=int, default=60, help="RAG LLM request budget for this run")
     ap.add_argument("--report-only", action="store_true")
+    ap.add_argument("--reverify", metavar="RUN", help="re-check stored drafts of a run file (e.g. kg) with the current "
+                    "verifier -> out/eval/reverify_<RUN>.md")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     golden = load_golden(GOLDEN)
     eval_dir = load_settings().out_dir / "eval"
     code = 0
+    if a.reverify:
+        return _reverify_cli(eval_dir, a.reverify)
     if not a.report_only:
         if not a.system:
             ap.error("--system is required unless --report-only")

@@ -141,3 +141,18 @@ def test_citations_the_draft_never_references_do_not_count_toward_recall():
     r["draft"] = {"answer": "The Board held X [1].", "citations": [{}, {}], "parsed": True}
     s = score({**Q, "expected_cases": ["eoir_1", "eoir_2"]}, r)
     assert s["cited"] == ["eoir_1"] and s["recall"] == 0.5
+
+
+def test_reverify_reruns_the_current_gate_on_stored_drafts(graph_all):
+    from lisa.eval.qa_cli import reverify
+    v = Verifier(MemoryStore([graph_all]))
+    quote = "Under Pereira v. Sessions, 585 U. S. 198 (2018), the notice was defective"
+    ok = {"id": "q1", "status": "verified",
+          "draft": {"answer": "The Board held the notice was defective [1].", "parsed": True,
+                    "citations": [{"case": "eoir_1", "quote": quote, "page": 2}]}}
+    fake = {"id": "q2", "status": "verified",
+            "draft": {"answer": 'The Board said "the respondent is plainly eligible for relief here" [1].', "parsed": True,
+                      "citations": [{"case": "eoir_1", "quote": quote, "page": 2}]}}
+    rows = reverify([ok, fake, {"id": "q3", "status": "refused", "draft": None}], v)
+    assert [(r["id"], r["passed_now"]) for r in rows] == [("q1", True), ("q2", False)]
+    assert "unverified_quote" in rows[1]["new_problems"]
