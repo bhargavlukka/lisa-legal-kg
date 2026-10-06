@@ -16,7 +16,7 @@ import socket
 import sys
 from pathlib import Path
 
-from lisa.common.config import REPO_ROOT, load_settings
+from lisa.common.config import REPO_ROOT, load_pricing, load_settings
 from lisa.eval.qa import aggregate, load_golden, render_markdown, score
 
 GOLDEN = REPO_ROOT / "config" / "eval" / "golden_questions.yaml"
@@ -158,13 +158,14 @@ def report(eval_dir: Path, golden: list[dict]) -> Path:
     allowed = set(MCP_TOOLS + META_TOOLS)
     by_id = {q["id"]: q for q in golden}
     summary, rows = {}, {}
+    pricing = load_pricing()
     runs: dict[str, dict] = {}
     for path in sorted(eval_dir.glob("qa_*.jsonl")):
         name = re.sub(r"_s\d+$", "", path.stem[3:])               # parallel shards (qa_kg_s2) belong to their system
         runs.setdefault(name, {}).update(_load(path))
     for name, recs in runs.items():
         rows[name] = [score(by_id[i], recs[i], allowed) for i in by_id if i in recs]
-        summary[name] = aggregate(rows[name])
+        summary[name] = aggregate(rows[name], pricing)
     notes = [f"golden set: {len(golden)} questions ({GOLDEN.relative_to(REPO_ROOT).as_posix()})"]
     notes += [f"{s}: {summary[s]['n']}/{len(golden)} questions run" for s in summary]
     out = eval_dir / "qa_report.md"

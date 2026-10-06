@@ -5,6 +5,7 @@ ask() = one research turn:  memory digest + question -> agent (skill, subagent, 
 """
 from __future__ import annotations
 
+import dataclasses
 import os
 import time
 from dataclasses import dataclass, field
@@ -60,6 +61,7 @@ class Trajectory:
     model_calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    calls: dict = field(default_factory=dict)     # API message id -> (input_tokens, output_tokens)
 
     def names(self) -> list[str]:
         return [t["name"] for t in self.tools]
@@ -105,6 +107,10 @@ class ResearchAgent:
         self.agent = load_agent_settings()
         self.auth = load_auth_settings()
         setup_tracing("lisa-agent", self.settings.out_dir)
+        if self.agent.usage_proxy:                       # exact per-call token usage (see usage_proxy.py)
+            from lisa.agent import usage_proxy
+            url = usage_proxy.start(self.agent.base_url, self.settings.out_dir / "llm_usage.jsonl")
+            self.agent = dataclasses.replace(self.agent, base_url=url)
         self.token = os.environ.get("LISA_AGENT_TOKEN") or issue_token(self.auth, subject, role)
         host = os.environ.get("LISA_MCP_HOST") or self.serve.host
         self.urls = {s: os.environ.get(f"LISA_{s.upper()}_URL") or f"http://{host}:{self.serve.ports[s]}/mcp"
@@ -189,10 +195,16 @@ class ResearchAgent:
             final, last = "", ""
             async for m in client.receive_response():
                 if isinstance(m, AssistantMessage):
-                    traj.model_calls += 1
+                    # the CLI emits one AssistantMessage per content block, each repeating the API call's usage
                     u = m.usage or {}
-                    traj.input_tokens += int(u.get("input_tokens") or 0)
-                    traj.output_tokens += int(u.get("output_tokens") or 0)
+                    key = m.message_id or m.uuid or id(m)
+                    prev = traj.calls.get(key)
+                    if prev is None:
+                        traj.model_calls += 1
+                    traj.calls[key] = (max(int(u.get("input_tokens") or 0), prev[0] if prev else 0),
+                                       max(int(u.get("output_tokens") or 0), prev[1] if prev else 0))
+                    traj.input_tokens = sum(c[0] for c in traj.calls.values())
+                    traj.output_tokens = sum(c[1] for c in traj.calls.values())
                     if m.parent_tool_use_id is None:
                         txt = "".join(b.text for b in m.content if isinstance(b, TextBlock))
                         last = txt or last

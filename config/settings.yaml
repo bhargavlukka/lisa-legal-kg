@@ -20,6 +20,9 @@ llm:
   edge_split_chars: 60000
   include_unverified_in_graph: false
   json_mode: true
+  # USD per million tokens for `model`, as published by the gateway (GET /custom-openai/v1/models, 2026-10-06);
+  # used to report cost per query (src/lisa/eval/qa.py). Update when the gateway's price changes.
+  pricing: {input_per_mtok: 0.0214, output_per_mtok: 0.50}
 eval:
   match_threshold: 0.3
   fewshot_units: [eoir_4018__u1of1, scotus_2017_17-269__u1of1]
@@ -48,3 +51,4 @@ agent:
   max_turns: 30
   max_revisions: 2
   sessions_dir: sessions          # under out_dir; persisted research-session memory
+  usage_proxy: true               # local proxy: streamed gateway replies omit input_tokens (src/lisa/agent/usage_proxy.py)
