@@ -16,7 +16,7 @@ import socket
 import sys
 from pathlib import Path
 
-from lisa.common.config import REPO_ROOT, load_settings
+from lisa.common.config import REPO_ROOT, load_pricing, load_settings
 from lisa.eval.qa import aggregate, load_golden, render_markdown, score
 
 GOLDEN = REPO_ROOT / "config" / "eval" / "golden_questions.yaml"
@@ -113,7 +113,8 @@ def run_kg(questions: list[dict], path: Path) -> int:
         rec = {"id": q["id"], "system": "kg", "status": r.status, "text": r.text, "draft": r.draft,
                "report": r.report, "latency_s": round(r.latency_s, 2), "input_tokens": r.trajectory.input_tokens,
                "output_tokens": r.trajectory.output_tokens, "model_calls": r.trajectory.model_calls,
-               "tools": r.trajectory.names(), "revisions": r.revisions, "gate_calls": r.gate_calls}
+               "tools": r.trajectory.names(), "revisions": r.revisions, "gate_calls": r.gate_calls,
+               "sdk_session_id": r.sdk_session_id}
         why = model_failed(rec)
         if why:
             # the model path failed (quota, 429, outage), possibly mid-turn: not a result - stop so a rerun resumes
@@ -158,13 +159,14 @@ def report(eval_dir: Path, golden: list[dict]) -> Path:
     allowed = set(MCP_TOOLS + META_TOOLS)
     by_id = {q["id"]: q for q in golden}
     summary, rows = {}, {}
+    pricing = load_pricing()
     runs: dict[str, dict] = {}
     for path in sorted(eval_dir.glob("qa_*.jsonl")):
         name = re.sub(r"_s\d+$", "", path.stem[3:])               # parallel shards (qa_kg_s2) belong to their system
         runs.setdefault(name, {}).update(_load(path))
     for name, recs in runs.items():
         rows[name] = [score(by_id[i], recs[i], allowed) for i in by_id if i in recs]
-        summary[name] = aggregate(rows[name])
+        summary[name] = aggregate(rows[name], pricing)
     notes = [f"golden set: {len(golden)} questions ({GOLDEN.relative_to(REPO_ROOT).as_posix()})"]
     notes += [f"{s}: {summary[s]['n']}/{len(golden)} questions run" for s in summary]
     out = eval_dir / "qa_report.md"

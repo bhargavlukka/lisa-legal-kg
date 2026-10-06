@@ -15,7 +15,8 @@ Branch `phase3-mcp-servers` (stacked on phase 2). Model path: SharedLLM pool, `~
 | 6 | Docker build + compose live | done: GitHub Actions `docker-stack` passes (both images, compose up, auth/roles/tools/degradation smoke, Neo4j backend, agent image); fixes: editable install, container UID for the ./out mount |
 | 7 | `--report-only` + `--reverify kg` (25/28) / `kg_no_token` (2/2), reports copied to `docs/eval/` | done |
 | 8 | `docs/evaluation_report.md` sections 2-4 | done (final numbers being refreshed for 28/28) |
-| 9 | PR `phase3-mcp-servers` -> `main` (contains phase 2), links to the owner | todo |
+| 9 | PR `phase3-mcp-servers` -> `main` (contains phase 2), links to the owner | done (PR #2 merged) |
+| 10 | Cost per query (spec §7 #11): metering proxy, gateway pricing, metered KG rerun (`qa_kg_metered*.jsonl`) | done |
 
 ## Resume commands
 

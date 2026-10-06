@@ -104,9 +104,14 @@ locally); every service also writes `out/traces/<service>.jsonl`. Neo4j browser:
 .venv/Scripts/python scripts/eval_extraction.py                   # extraction P/R vs gold -> out/eval/extraction_report.md (scores the stored gpt-oss:120b extraction)
 .venv/Scripts/python scripts/eval_qa.py --system rag              # RAG baseline on the golden set
 .venv/Scripts/python scripts/eval_qa.py --system kg               # KG agent (servers must be running)
+.venv/Scripts/python scripts/eval_qa.py --system kg --tag metered # KG agent through the metering proxy (cost per query; shards: --tag metered_s2 --ids ...)
 .venv/Scripts/python scripts/eval_qa.py --report-only             # -> out/eval/qa_report.md, qa_summary.json
 .venv/Scripts/python scripts/eval_qa.py --reverify kg             # re-check stored drafts with the current gate -> out/eval/reverify_kg.md
 ```
+
+Cost per query is tokens x `llm.pricing` (the gateway's published price). The agent's token counts come from a local
+metering proxy (`agent.usage_proxy: true`), because the gateway omits input tokens on streamed replies; every
+metered call is logged to `out/llm_usage.jsonl`.
 
 Degradation run: a second, token-less verifier + external server pair side by side with the normal servers, with its
 own `LISA_OUT_DIR` (a copy of `out/graph_all*.json`, empty CourtListener cache) and ports moved with

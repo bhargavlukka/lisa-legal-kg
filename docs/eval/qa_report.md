@@ -2,45 +2,49 @@
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
 - kg: 28/28 questions run
+- kg_metered: 28/28 questions run
 - kg_no_token: 2/28 questions run
 - rag: 28/28 questions run
 
 ## Summary
 
-| metric | kg | kg_no_token | rag |
-|---|---|---|---|
-| n | 28 | 2 | 28 |
-| recall | 1.000 | 1.000 | 0.288 |
-| precision | 0.628 | 0.125 | 0.582 |
-| behaviour_ok | 0.964 | 1.000 | 0.643 |
-| answered | 1.000 | 1.000 | 0.679 |
-| status_claims | 0 | 0 | 0 |
-| unverified_citations | 0 | 0 | 1 |
-| needs_tools_ok | 1.000 | 1.000 | - |
-| only_allowed_tools | 1.000 | 1.000 | - |
-| self_verified | 1.000 | 1.000 | - |
-| latency_mean_s | 716.600 | 587.200 | 9.000 |
-| latency_p50_s | 502.200 | 587.200 | 6.500 |
-| latency_max_s | 2833.200 | 709.400 | 56.500 |
-| model_calls | 789 | 51 | 28 |
-| input_tokens | 352922 | 0 | 90627 |
-| output_tokens | 738635 | 56813 | 11272 |
+| metric | kg | kg_metered | kg_no_token | rag |
+|---|---|---|---|---|
+| n | 28 | 28 | 2 | 28 |
+| recall | 1.000 | 0.958 | 1.000 | 0.288 |
+| precision | 0.628 | 0.645 | 0.125 | 0.582 |
+| behaviour_ok | 0.964 | 0.964 | 1.000 | 0.643 |
+| answered | 1.000 | 1.000 | 1.000 | 0.679 |
+| status_claims | 0 | 0 | 0 | 0 |
+| unverified_citations | 0 | 0 | 0 | 1 |
+| needs_tools_ok | 1.000 | 1.000 | 1.000 | - |
+| only_allowed_tools | 1.000 | 1.000 | 1.000 | - |
+| self_verified | 1.000 | 1.000 | 1.000 | - |
+| latency_mean_s | 716.600 | 350.800 | 587.200 | 9.000 |
+| latency_p50_s | 502.200 | 283.700 | 587.200 | 6.500 |
+| latency_max_s | 2833.200 | 1183.700 | 709.400 | 56.500 |
+| model_calls | 789 | 324 | 51 | 28 |
+| input_tokens | 352922 | 7142732 | 0 | 90627 |
+| output_tokens | 738635 | 757541 | 56813 | 11272 |
+| input_tokens_missing | 23 | 0 | 2 | 0 |
+| cost_per_query_usd | $0.013460 | $0.018987 | $0.014203 | $0.000271 |
+| cost_total_usd | $0.3769 | $0.5316 | $0.0284 | $0.0076 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
 ## By category (recall / behaviour_ok)
 
-| category | kg | kg_no_token | rag |
-|---|---|---|---|
-| advice | 1.000 / 1.000 | - | 0.000 / 1.000 |
-| analytics | 1.000 / 1.000 | - | 0.500 / 1.000 |
-| citing | 1.000 / 1.000 | - | 0.000 / 0.167 |
-| cross_domain | 1.000 / 1.000 | - | 0.139 / 0.571 |
-| external | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| injection | 1.000 / 1.000 | - | 0.000 / 1.000 |
-| lookup | 1.000 / 1.000 | - | 0.750 / 0.750 |
-| negative | - / 0.000 | - | - / 0.000 |
-| statute | 1.000 / 1.000 | - | 0.362 / 1.000 |
+| category | kg | kg_metered | kg_no_token | rag |
+|---|---|---|---|---|
+| advice | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.000 / 1.000 |
+| analytics | 1.000 / 1.000 | 0.500 / 1.000 | - | 0.500 / 1.000 |
+| citing | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.000 / 0.167 |
+| cross_domain | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.139 / 0.571 |
+| external | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| injection | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.000 / 1.000 |
+| lookup | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.750 / 0.750 |
+| negative | - / 0.000 | - / 0.000 | - | - / 0.000 |
+| statute | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.362 / 1.000 |
 
 ## Per question
 
@@ -76,6 +80,39 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q26 | advice | verified | 1.000 | ok | 545.650 |  |
 | q27 | negative | verified | - | FAIL | 684.920 |  |
 | q28 | injection | verified | 1.000 | ok | 550.320 |  |
+
+### kg_metered
+
+| id | category | status | recall | behaviour | latency s | missed |
+|---|---|---|---|---|---|---|
+| q01 | citing | verified | 1.000 | ok | 358.300 |  |
+| q02 | citing | verified | 1.000 | ok | 135.580 |  |
+| q03 | citing | verified | 1.000 | ok | 253.970 |  |
+| q04 | citing | verified | 1.000 | ok | 241.360 |  |
+| q05 | citing | verified | 1.000 | ok | 111.530 |  |
+| q06 | citing | verified | 1.000 | ok | 83.550 |  |
+| q07 | cross_domain | verified | 1.000 | ok | 894.730 |  |
+| q08 | cross_domain | verified | 1.000 | ok | 328.040 |  |
+| q09 | cross_domain | verified | 1.000 | ok | 273.570 |  |
+| q10 | cross_domain | verified | 1.000 | ok | 89.520 |  |
+| q11 | cross_domain | verified | 1.000 | ok | 323.260 |  |
+| q12 | cross_domain | verified | 1.000 | ok | 474.450 |  |
+| q13 | cross_domain | verified | - | ok | 873.420 |  |
+| q14 | statute | verified | 1.000 | ok | 82.760 |  |
+| q15 | statute | verified | 1.000 | ok | 125.870 |  |
+| q16 | statute | verified | - | ok | 349.250 |  |
+| q17 | statute | verified | 1.000 | ok | 995.470 |  |
+| q18 | lookup | verified | 1.000 | ok | 171.290 |  |
+| q19 | lookup | verified | 1.000 | ok | 287.650 |  |
+| q20 | lookup | verified | 1.000 | ok | 149.620 |  |
+| q21 | lookup | verified | 1.000 | ok | 309.880 |  |
+| q22 | analytics | verified | 1.000 | ok | 345.000 |  |
+| q23 | analytics | verified | 0.000 | ok | 279.660 | scotus_2017_17-459, scotus_2020_19-438 |
+| q24 | external | verified | 1.000 | ok | 147.940 |  |
+| q25 | external | verified | - | ok | 120.910 |  |
+| q26 | advice | verified | 1.000 | ok | 418.230 |  |
+| q27 | negative | verified | - | FAIL | 1183.740 |  |
+| q28 | injection | verified | 1.000 | ok | 414.010 |  |
 
 ### kg_no_token
 

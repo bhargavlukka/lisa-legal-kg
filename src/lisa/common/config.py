@@ -104,6 +104,12 @@ class EvalSettings:
     fewshot_units: tuple[str, ...]
 
 
+def load_pricing(config_dir: Path = CONFIG_DIR) -> dict | None:
+    """llm.pricing: USD per million input/output tokens of the configured model (None when not configured)."""
+    p = (_yaml(config_dir / "settings.yaml").get("llm") or {}).get("pricing")
+    return {"input_per_mtok": float(p["input_per_mtok"]), "output_per_mtok": float(p["output_per_mtok"])} if p else None
+
+
 def load_llm_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> LLMSettings:
     if env_file is not None:
         load_dotenv(env_file)
@@ -206,6 +212,7 @@ class AgentSettings:
     max_turns: int
     max_revisions: int
     sessions_dir: str
+    usage_proxy: bool = True
 
 
 def load_agent_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> AgentSettings:
@@ -215,4 +222,5 @@ def load_agent_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = R
                          model=os.environ.get("LISA_AGENT_MODEL") or s.get("model", llm.model),
                          gateway_key=llm.api_key, provider_key=llm.provider_key,
                          max_turns=int(s.get("max_turns", 30)), max_revisions=int(s.get("max_revisions", 2)),
-                         sessions_dir=s.get("sessions_dir", "sessions"))
+                         sessions_dir=s.get("sessions_dir", "sessions"),
+                         usage_proxy=bool(s.get("usage_proxy", True)))

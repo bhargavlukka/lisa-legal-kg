@@ -21,12 +21,21 @@ endpoint is a config change, and the LLM cache key includes the model, so result
 
 | limit | source | value / observation |
 |---|---|---|
+| Streamed usage | SharedLLM `/anthropic` | streamed replies report `input_tokens: 0` (message_start) and never send the real count; the Claude CLI always streams -> the agent goes through a local metering proxy (`src/lisa/agent/usage_proxy.py`, `agent.usage_proxy: true`) that requests each call non-streamed, logs exact usage to `out/llm_usage.jsonl` and replays it to the CLI as Anthropic SSE |
 | Response encoding | SharedLLM | replies are padded with leading whitespace, which corrupts gzip decoding -> client sends `Accept-Encoding: identity` |
 | Concurrent requests | gateway / Ollama Cloud | 12 in flight (2 runs x 6 workers) -> HTTP 429 "too many concurrent requests"; 3 workers per run is stable |
 | Daily request cap, per-minute tokens | SharedLLM tiered caps (spec §6) | budgeted per run, see below |
 | Output length | reasoning models spend output tokens on hidden reasoning | `max_output_tokens: 16384`; glm-flash otherwise reasons until the cap, so `llm.reasoning: {max_tokens: 4096}`; a truncated (`finish_reason: length`) or empty reply is never cached and is recorded as a failed window, not parsed |
 | Latency | measured | extraction call ~30-60 s (20k in / 15k out tokens per unit); enrichment 203 calls in 573 s with 6 workers; agent turn 6-10 min (first verified answer 589 s, pilot q01 413 s) |
 | CourtListener | spec §6 | 5/min, 50/hour, 125/day per free token |
+
+## Price
+
+`llm.pricing` in `config/settings.yaml` holds the gateway's published price for `~z-ai/glm-flash-latest`
+(`GET /custom-openai/v1/models`, read 2026-10-06): **$0.0214 per million input tokens, $0.50 per million output
+tokens**. `scripts/eval_qa.py --report-only` multiplies each question's token counts by it to report
+`cost_per_query_usd` (evaluation report section 2). Output tokens dominate the bill: the model's hidden reasoning is
+billed as output.
 
 ## Budget plan
 

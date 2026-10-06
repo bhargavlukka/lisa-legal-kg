@@ -83,7 +83,12 @@ def _rate(rows, key) -> float | None:
     return round(sum(map(bool, xs)) / len(xs), 3) if xs else None
 
 
-def aggregate(rows: list[dict]) -> dict:
+def query_cost(row: dict, pricing: dict) -> float:
+    """USD for one question from its token counts and the per-million-token prices."""
+    return (row["input_tokens"] * pricing["input_per_mtok"] + row["output_tokens"] * pricing["output_per_mtok"]) / 1e6
+
+
+def aggregate(rows: list[dict], pricing: dict | None = None) -> dict:
     lat = [r["latency_s"] for r in rows if r.get("latency_s") is not None]
     out = {"n": len(rows), "recall": _mean(r["recall"] for r in rows), "precision": _mean(r["precision"] for r in rows),
            "behaviour_ok": _rate(rows, "behaviour_ok"),
@@ -94,7 +99,12 @@ def aggregate(rows: list[dict]) -> dict:
            "latency_p50_s": round(statistics.median(lat), 1) if lat else None,
            "latency_max_s": round(max(lat), 1) if lat else None,
            "input_tokens": sum(r["input_tokens"] for r in rows), "output_tokens": sum(r["output_tokens"] for r in rows),
-           "model_calls": sum(r["model_calls"] for r in rows)}
+           "model_calls": sum(r["model_calls"] for r in rows),
+           # answered with output but no input count: streamed gateway replies before the usage proxy (cost understated)
+           "input_tokens_missing": sum(bool(r["output_tokens"]) and not r["input_tokens"] for r in rows)}
+    if pricing and rows:
+        out["cost_per_query_usd"] = round(statistics.fmean(query_cost(r, pricing) for r in rows), 6)
+        out["cost_total_usd"] = round(sum(query_cost(r, pricing) for r in rows), 4)
     for k in ("needs_tools_ok", "only_allowed_tools", "self_verified"):
         if any(k in r for r in rows):
             out[k] = _rate(rows, k)
@@ -106,7 +116,9 @@ def aggregate(rows: list[dict]) -> dict:
     return out
 
 
-def _fmt(v) -> str:
+def _fmt(v, key: str = "") -> str:
+    if key.startswith("cost") and v is not None:
+        return f"${v:.6f}" if key.endswith("per_query_usd") else f"${v:.4f}"
     return "-" if v is None else f"{v:.3f}" if isinstance(v, float) else str(v)
 
 
@@ -114,11 +126,12 @@ def render_markdown(summary: dict[str, dict], rows: dict[str, list[dict]], notes
     systems = list(summary)
     keys = ["n", "recall", "precision", "behaviour_ok", "answered", "status_claims", "unverified_citations",
             "needs_tools_ok", "only_allowed_tools", "self_verified", "latency_mean_s", "latency_p50_s",
-            "latency_max_s", "model_calls", "input_tokens", "output_tokens"]
+            "latency_max_s", "model_calls", "input_tokens", "output_tokens", "input_tokens_missing",
+            "cost_per_query_usd", "cost_total_usd"]
     out = ["# LISA Phase 5 - question answering: KG agent vs RAG baseline", ""]
     out += [f"- {n}" for n in notes or []] + ([""] if notes else [])
     out += ["## Summary", "", "| metric | " + " | ".join(systems) + " |", "|---" * (len(systems) + 1) + "|"]
-    out += [f"| {k} | " + " | ".join(_fmt(summary[s].get(k)) for s in systems) + " |" for k in keys]
+    out += [f"| {k} | " + " | ".join(_fmt(summary[s].get(k), k) for s in systems) + " |" for k in keys]
     out += ["", "Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: "
             "answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.",
             "", "## By category (recall / behaviour_ok)", "",

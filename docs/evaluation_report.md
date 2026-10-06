@@ -77,17 +77,37 @@ answer references by a `[n]` marker. Recall is averaged over the 24 questions wi
 those that also cite at least one verified case (KG 24, RAG 14). `behaviour_ok`: `answer` -> status
 verified or salvaged; `refuse` -> no in-corpus case cited; `disclaimer` -> advice disclaimer present.
 
-| metric | KG agent | RAG |
-|---|---|---|
-| n | 28 | 28 |
-| recall | **1.000** | 0.288 |
-| precision | 0.628 | 0.582 |
-| behaviour_ok | **0.964** | 0.643 |
-| answered (verified or salvaged) | 1.000 | 0.679 |
-| unverified citations | 0 | 1 (q10) |
-| unqualified status claims | 0 | 0 |
-| latency mean / p50 / max, s | 716.6 / 502.2 / 2833.2 | 9.0 / 6.5 / 56.5 |
-| model calls | 789 | 28 |
+| metric | KG agent | KG agent, metered rerun | RAG |
+|---|---|---|---|
+| n | 28 | 28 | 28 |
+| recall | **1.000** | 0.958 | 0.288 |
+| precision | 0.628 | 0.645 | 0.582 |
+| behaviour_ok | **0.964** | **0.964** | 0.643 |
+| answered (verified or salvaged) | 1.000 | 1.000 | 0.679 |
+| unverified citations | 0 | 0 | 1 (q10) |
+| unqualified status claims | 0 | 0 | 0 |
+| latency mean / p50 / max, s | 716.6 / 502.2 / 2833.2 | 350.8 / 283.7 / 1183.7 | 9.0 / 6.5 / 56.5 |
+| model calls | 789 (per content block) | 324 (per API call) | 28 |
+| input / output tokens | not fully recorded | 7,142,732 / 757,541 | 90,627 / 11,272 |
+| **cost per query, USD** | - | **$0.0190** | **$0.00027** |
+| cost of the 28-question run, USD | - | $0.53 | $0.0076 |
+
+**Cost per query.** Price: the gateway's published rate for `~z-ai/glm-flash-latest`, $0.0214 per million input
+and $0.50 per million output tokens (`llm.pricing`, read from `GET /custom-openai/v1/models` on 2026-10-06). RAG cost
+comes from the token counts of its run. The first KG run could not be costed: the gateway reports `input_tokens: 0`
+on streamed replies and the Claude CLI always streams, so 23 of its 28 records had no input count. The agent now
+reaches the gateway through a local metering proxy (`src/lisa/agent/usage_proxy.py`) that requests each call
+non-streamed and logs exact usage per API message id to `out/llm_usage.jsonl`. The **metered rerun** repeated all
+28 questions through it; all 324 logged calls are attributed to a question via the CLI transcripts
+(`scripts/reconcile_usage.py`), so the KG cost above is measured, not estimated. A KG answer costs about 70 times a
+RAG answer (input: about 255 k tokens per question, because every agent step re-sends the tool context) and takes
+minutes instead of seconds; in exchange it finds the citing cases that RAG cannot retrieve (below).
+
+The metered rerun reproduces the first run's quality: 28/28 verified, the same behaviour score, the same q27
+failure. Its one recall miss is q23 (cross-corpus bridges): the answer names Pereira and Pereida as the strongest
+bridges, which is correct, but anchors every quote on the citing BIA decisions rather than on the two Supreme Court
+opinions, so the scorer (which counts only expected cases in tier `verified_in_corpus`) gives it 0. Its latency is
+lower because the three shards ran against a less loaded gateway and the four revision turns were shorter.
 
 KG statuses: 28 verified. RAG statuses: 9 verified, 10 salvaged (unsupported sentences removed), 9 refused (no
 draft passed the gate).
@@ -240,15 +260,16 @@ bounded, matching is ReDoS-safe, unused citations are flagged, and external cita
   model ([decision_log.md](decision_log.md)).
 - Reasoning is capped at 4096 tokens (`llm.reasoning.max_tokens`); without the cap glm-flash reasoned until the
   output cap and returned an empty answer (`finish_reason: length`).
-- Cost: metered on the SharedLLM account balance; the per-run charge is on the SharedLLM dashboard and is not
-  reproduced here. Token totals from the run records:
+- Cost: see section 2 (measured cost per query from the metered rerun). Token totals from the run records:
 
-| run | model calls | input tokens | output tokens |
-|---|---|---|---|
-| KG agent (28 q) | 789 | 352,922 (reported for 5 of 28 turns) | 738,635 |
-| KG no-token (2 q) | 51 | not reported | 56,813 |
-| RAG (28 q) | 28 | 90,627 | 11,272 |
+| run | model calls | input tokens | output tokens | cost, USD |
+|---|---|---|---|---|
+| KG agent (28 q) | 789 (per content block) | 352,922 (reported for 5 of 28 turns) | 738,635 | not measurable |
+| KG agent, metered rerun (28 q) | 324 | 7,142,732 | 757,541 | 0.53 |
+| KG no-token (2 q) | 51 | not reported | 56,813 | not measurable |
+| RAG (28 q) | 28 | 90,627 | 11,272 | 0.0076 |
 
-The gateway mostly does not report input-token usage on the Anthropic-compatible route the agent uses (input = 0
-in 23 of 28 KG records; non-zero for q15, q19, q20, q22, q24), so the KG input total is a lower bound. The RAG baseline
-uses the OpenAI-compatible route, which reports both.
+The first KG run's input total is a lower bound: the gateway reports `input_tokens: 0` on streamed replies on the
+Anthropic-compatible route (non-zero only for q15, q19, q20, q22, q24). The metering proxy fixes this for all later
+agent runs ([model_constraints.md](model_constraints.md)). The RAG baseline uses the OpenAI-compatible route,
+which reports both.
