@@ -46,7 +46,8 @@ def _servers_up(agent) -> list[str]:
     return down
 
 
-_PROVIDER_ERROR = re.compile(r"API Error|\b429\b|usage limit|rate.?limit", re.I)
+# provider failure text, not a bare "429" (reporter citations such as "26 I&N Dec. 429" are legitimate answers)
+_PROVIDER_ERROR = re.compile(r"API Error|Request rejected \(429\)|HTTP 429|usage limit|rate.?limit", re.I)
 
 
 def model_failed(rec: dict) -> str | None:

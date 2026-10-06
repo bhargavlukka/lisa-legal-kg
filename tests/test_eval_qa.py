@@ -128,3 +128,9 @@ def test_parsed_answer_counts_even_when_the_gateway_reports_no_usage():
            "draft": {"answer": "Matter of X [1].", "citations": [{"case_id": "eoir_1"}], "parsed": True}}
     assert qa_cli.model_failed(rec) is None
     assert qa_cli.model_failed({**rec, "draft": {"answer": "", "citations": [], "parsed": False}})
+
+
+def test_reporter_citations_with_429_are_not_provider_errors():
+    rec = {"status": "verified", "input_tokens": 5, "output_tokens": 5,
+           "draft": {"answer": "See Matter of X, 26 I&N Dec. 429 (BIA 2014) and 429 U.S. 1 [1].", "parsed": True}}
+    assert qa_cli.model_failed(rec) is None
