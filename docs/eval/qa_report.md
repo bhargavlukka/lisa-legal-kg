@@ -1,16 +1,16 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
 - golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 8/28 questions run
+- kg: 12/28 questions run
 - rag: 28/28 questions run
 
 ## Summary
 
 | metric | kg | rag |
 |---|---|---|
-| n | 8 | 28 |
+| n | 12 | 28 |
 | recall | 1.000 | 0.288 |
-| precision | 0.846 | 0.479 |
+| precision | 0.765 | 0.479 |
 | behaviour_ok | 1.000 | 0.643 |
 | answered | 1.000 | 0.679 |
 | status_claims | 0 | 0 |
@@ -18,12 +18,12 @@
 | needs_tools_ok | 1.000 | - |
 | only_allowed_tools | 1.000 | - |
 | self_verified | 1.000 | - |
-| latency_mean_s | 546.300 | 9.000 |
+| latency_mean_s | 501.500 | 9.000 |
 | latency_p50_s | 257.200 | 6.500 |
 | latency_max_s | 2402.300 | 56.500 |
-| model_calls | 152 | 28 |
+| model_calls | 239 | 28 |
 | input_tokens | 0 | 90627 |
-| output_tokens | 135189 | 11272 |
+| output_tokens | 207254 | 11272 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
@@ -55,6 +55,10 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q06 | citing | verified | 1.000 | ok | 234.470 |  |
 | q07 | cross_domain | verified | 1.000 | ok | 446.400 |  |
 | q08 | cross_domain | verified | 1.000 | ok | 2402.300 |  |
+| q09 | cross_domain | verified | 1.000 | ok | 350.040 |  |
+| q10 | cross_domain | verified | 1.000 | ok | 177.940 |  |
+| q11 | cross_domain | verified | 1.000 | ok | 89.310 |  |
+| q12 | cross_domain | verified | 1.000 | ok | 1030.190 |  |
 
 ### rag
 
