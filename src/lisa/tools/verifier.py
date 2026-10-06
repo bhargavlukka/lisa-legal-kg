@@ -23,9 +23,11 @@ STATUS_QUALIFIER = re.compile(r"not (been )?verified|unverified|cannot (be )?(co
 LEGAL_CUES = re.compile(r"\b(held|holds|holding|ruled|rules|concluded|decided|found|determined|reasoned|applied|"
                         r"applies|distinguished|overruled|affirmed|reversed|remanded|dismissed|sustained|"
                         r"requires?|eligib\w*|removab\w*|inadmissib\w*|deportab\w*|statute|section|§|U\.\s?S\.\s?C|"
-                        r"I&N|Board|Court|Attorney General|Congress|INA)\b")
+                        r"I&N|Board|Court|Attorney General|Congress|INA)\b|§", re.I)
 CASE_CITE = re.compile(r"\b\d{1,3}\s+(?:I&N\s*Dec\.|U\.\s?S\.|S\.\s?Ct\.|F\.\s?(?:2d|3d|4th)|F\.\s?Supp\.)\s*\d{1,4}\b")
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+QUOTED = re.compile(r"[\"“]([^\"“”]+)[\"”]")          # a quotation in the answer prose
+NAME_STOP = {"matter", "united", "states", "the", "and", "rel."}
 EXEMPT = re.compile(r"^\s*(#|\*\*?(provenance|sources|citations|disclaimer)|provenance|sources?:|disclaimer|note:|"
                     r"this is (legal )?research|i (could|did) not find|no (case|result))", re.I)
 
@@ -69,6 +71,12 @@ class Verifier:
             return {"case": case, "in_corpus": False, "tier": UNVERIFIED, "reason": "external resolution disabled"}
         ext = self.external.lookup_citation(case)
         if ext.get("status") == "resolved":
+            bad = _name_mismatch(case, ext.get("case_name") or "")
+            if bad:
+                return {"case": case, "in_corpus": False, "tier": UNVERIFIED, "external": ext, "reason": bad}
+            if quote:
+                return {"case": case, "in_corpus": False, "tier": UNVERIFIED, "external": ext,
+                        "reason": "quote cannot be checked: the external source text is not stored - cite without a quote"}
             return {"case": case, "in_corpus": False, "tier": EXTERNAL, "external": ext, "legal_status": STATUS}
         return {"case": case, "in_corpus": False, "tier": UNVERIFIED,
                 "reason": ext.get("reason") or "CourtListener did not resolve the citation", "external": ext}
@@ -82,6 +90,9 @@ class Verifier:
         for n in sorted(used):
             if not 1 <= n <= len(citations):
                 problems.append({"kind": "dangling_marker", "marker": n})
+        for i in range(1, len(citations) + 1):
+            if i not in used:
+                problems.append({"kind": "unused_citation", "marker": i})
         for i, r in enumerate(results, 1):
             if r["tier"] == UNVERIFIED:
                 problems.append({"kind": "unverified_citation", "marker": i, "case": r["case"], "reason": r.get("reason")})
@@ -93,11 +104,32 @@ class Verifier:
             for m in CASE_CITE.finditer(s):
                 if not MARKER.search(s):
                     problems.append({"kind": "uncited_case_reference", "cite": m.group(0)})
+            for q in QUOTED.findall(s):
+                if len(squash(q)) >= MIN_QUOTE and not self._quote_on_cited_page(q, s, results):
+                    problems.append({"kind": "unverified_quote", "quote": q[:200]})
             if STATUS_CLAIM.search(s) and not STATUS_QUALIFIER.search(s):
                 problems.append({"kind": "unqualified_status_claim", "sentence": s[:300]})
         tiers = {t: sum(r["tier"] == t for r in results) for t in (VERIFIED, EXTERNAL, UNVERIFIED)}
         return {"passed": not problems and bool(citations), "tiers": tiers, "citations": results,
                 "problems": problems if citations else problems + [{"kind": "no_citations"}]}
+
+
+    def _quote_on_cited_page(self, quote: str, sentence: str, results: list[dict]) -> bool:
+        """A quotation in the prose must be on a page of an in-corpus case cited in that sentence (any, if unmarked)."""
+        marks = {int(n) for m in MARKER.finditer(sentence) for n in m.group(1).split(",")}
+        cids = {r["case_id"] for i, r in enumerate(results, 1)
+                if r.get("in_corpus") and r.get("case_id") and (not marks or i in marks)}
+        return any(self.check_quote(cid, quote)["quote_match"] for cid in cids)
+
+
+def _name_mismatch(cited: str, resolved: str) -> str | None:
+    """The case name given with an external citation must share a word with the name CourtListener resolved."""
+    m = CASE_CITE.search(cited)
+    head = cited[:m.start()].lower() if m else ""
+    words = {w for w in re.findall(r"[a-z][a-z'-]{3,}", head) if w not in NAME_STOP}
+    if not words or not resolved or any(w in resolved.lower() for w in words):
+        return None
+    return f"cited name does not match the case CourtListener resolved: {resolved!r}"
 
 
 def _int(v) -> int | None:

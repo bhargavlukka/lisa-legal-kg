@@ -77,3 +77,33 @@ def test_qualified_status_statement_allowed(v):
 def test_sentences_keep_legal_abbreviations():
     s = sentences("See Pereira v. Sessions, 585 U.S. 198 (2018). The Board held X [1].\n- Second bullet [2].")
     assert s == ["See Pereira v. Sessions, 585 U.S. 198 (2018).", "The Board held X [1].", "Second bullet [2]."]
+
+
+CIT = [{"case": "eoir_1", "quote": QUOTE, "page": 2}]
+
+
+def test_quotes_in_answer_prose_must_be_on_a_cited_page(v):
+    fake = v.verify_answer('The Board stated that "the respondent is plainly eligible for asylum relief" [1].', CIT)
+    assert not fake["passed"] and "unverified_quote" in {p["kind"] for p in fake["problems"]}
+    real = v.verify_answer("The Board noted \u201cthe notice was defective\u201d under Pereira [1].", CIT)
+    assert real["passed"], real["problems"]
+
+
+def test_legal_cues_are_case_insensitive_and_section_sign_counts(v):
+    for s in ["Held: the notice was defective.", "Eligibility turns on the notice.", "See \u00a7 1229(a) for the rule."]:
+        r = v.verify_answer(s + " The Board held so [1].", CIT)
+        assert "uncited_claim" in {p["kind"] for p in r["problems"]}, s
+
+
+def test_citation_never_referenced_by_a_marker_is_a_problem(v):
+    r = v.verify_answer("The Board held the notice was defective [1].", CIT + CIT)
+    assert not r["passed"] and {"kind": "unused_citation", "marker": 2} in r["problems"]
+
+
+def test_external_citation_cannot_carry_an_unchecked_quote_or_a_wrong_name(graph_all):
+    ok = Verifier(MemoryStore([graph_all]), FakeExternal())
+    assert ok.verify_citation("Niz-Chavez v. Garland, 593 U.S. 155")["tier"] == EXTERNAL
+    wrong = ok.verify_citation("Roe v. Wade, 593 U.S. 155")
+    assert wrong["tier"] == UNVERIFIED and "name" in wrong["reason"]
+    quoted = ok.verify_citation("593 U.S. 155", "a quotation the external source text was never checked for", 3)
+    assert quoted["tier"] == UNVERIFIED and "quote" in quoted["reason"]

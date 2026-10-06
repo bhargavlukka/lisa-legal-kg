@@ -134,3 +134,10 @@ def test_reporter_citations_with_429_are_not_provider_errors():
     rec = {"status": "verified", "input_tokens": 5, "output_tokens": 5,
            "draft": {"answer": "See Matter of X, 26 I&N Dec. 429 (BIA 2014) and 429 U.S. 1 [1].", "parsed": True}}
     assert qa_cli.model_failed(rec) is None
+
+
+def test_citations_the_draft_never_references_do_not_count_toward_recall():
+    r = rec(cites=[("eoir_1", VERIFIED), ("eoir_2", VERIFIED)])
+    r["draft"] = {"answer": "The Board held X [1].", "citations": [{}, {}], "parsed": True}
+    s = score({**Q, "expected_cases": ["eoir_1", "eoir_2"]}, r)
+    assert s["cited"] == ["eoir_1"] and s["recall"] == 0.5

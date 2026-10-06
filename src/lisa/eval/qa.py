@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from lisa.agent.guardrails.gate import DISCLAIMER
-from lisa.tools.verifier import STATUS_CLAIM, STATUS_QUALIFIER, UNVERIFIED, VERIFIED, sentences
+from lisa.tools.verifier import MARKER, STATUS_CLAIM, STATUS_QUALIFIER, UNVERIFIED, VERIFIED, sentences
 
 ANSWERED = ("verified", "salvaged")
 VERIFY_TOOL = "mcp__verifier__verify_answer"
@@ -26,9 +26,13 @@ def load_golden(path: Path) -> list[dict]:
     return qs
 
 
-def cited_cases(report: dict) -> list[str]:
+def cited_cases(report: dict, answer: str | None = None) -> list[str]:
+    """Verified in-corpus cases; with the draft answer given, only citations it references by a [n] marker."""
+    marks = None if answer is None else {int(n) for m in MARKER.finditer(answer) for n in m.group(1).split(",")}
     out = []
-    for c in report.get("citations", []):
+    for i, c in enumerate(report.get("citations", []), 1):
+        if marks is not None and i not in marks:
+            continue
         if c.get("tier") == VERIFIED and c.get("case_id") and c["case_id"] not in out:
             out.append(c["case_id"])
     return out
@@ -40,7 +44,7 @@ def unqualified_status_claims(text: str) -> int:
 
 def score(q: dict, rec: dict, allowed_tools: set[str] | None = None) -> dict:
     expected = set(q.get("expected_cases") or [])
-    cited = cited_cases(rec.get("report") or {})
+    cited = cited_cases(rec.get("report") or {}, (rec.get("draft") or {}).get("answer"))
     hit = expected & set(cited)
     expect, status = q.get("expect", "answer"), rec.get("status")
     if expect == "refuse":
