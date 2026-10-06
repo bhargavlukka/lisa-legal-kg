@@ -23,7 +23,7 @@ flowchart LR
     J["Jaeger (OTLP/HTTP :4318)<br/>+ out/traces/*.jsonl"]
     EV["Evaluation<br/>eval_extraction.py (gold P/R)<br/>eval_qa.py: KG agent vs RAG baseline"]
   end
-  LLM["SharedLLM gateway<br/>api.sharedllm.com/ollama<br/>gpt-oss:120b (BYOK)"]
+  LLM["SharedLLM gateway (pool)<br/>api.sharedllm.com<br/>~z-ai/glm-flash-latest"]
   CL["CourtListener REST v4<br/>5/min, 50/h, 125/day"]
 
   DATA --> DET --> GJSON

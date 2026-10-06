@@ -17,7 +17,7 @@ flowchart LR
   V --> CL
   AG["agent (Claude Agent SDK)<br/>skill + subagent + memory"] -->|JWT| G & V & A & X
   AG --> GATE["code gate<br/>verify -> revise -> salvage -> refuse"] --> V
-  AG <--> LLM["SharedLLM gateway<br/>gpt-oss:120b"]
+  AG <--> LLM["SharedLLM gateway<br/>~z-ai/glm-flash-latest"]
   LLMX <--> LLM
   G & V & A & X & AG -. OTel .-> J["Jaeger + out/traces"]
 ```
@@ -49,7 +49,7 @@ Four FastMCP servers over streamable HTTP, launched together by `scripts/serve_a
 | analytics | most_cited_precedents (PageRank / in-degree), statute_frequency, doctrine_influence, cross_corpus_bridges | refresh_analytics |
 | external-law | resolve_citation, search_opinions, get_opinion_cluster, get_docket, quota_status | clear_cache |
 
-Case text leaves the servers only inside `<<<UNTRUSTED_CASE_TEXT ... UNTRUSTED_CASE_TEXT>>>` fences with injection
+Case text (pages, search snippets, edge-evidence quotes, CourtListener names) leaves the servers only inside `<<<UNTRUSTED_CASE_TEXT ... UNTRUSTED_CASE_TEXT>>>` fences with injection
 flags (`common/untrusted.py`). The verifier resolves a citation to a corpus case and checks the quote against the
 stored page text (whitespace / typography normalized); out-of-corpus reporter citations go to CourtListener. Tiers:
 `verified_in_corpus`, `resolved_externally`, `unverified`. CourtListener calls (`common/courtlistener.py`) go through
@@ -88,7 +88,8 @@ HS256 JWTs (`common/auth.py`) with `researcher` / `admin` roles on every server;
 [threat_model.md](threat_model.md). OpenTelemetry spans for agent turns, tool calls, verifier gate decisions and
 server tool executions (`common/tracing.py`) go to Jaeger over OTLP/HTTP and to `out/traces/*.jsonl`.
 `docker-compose.yml` brings up Neo4j, Jaeger, the four servers and (on demand) the agent; secrets come only from
-`.env`, servers get only the secrets they use, and all ports bind to 127.0.0.1. Rate-limit budgets: see
+`.env`, each server gets only the secrets it uses, the agent gets the SharedLLM key and a pre-issued researcher
+token (never the signing secret), and all ports bind to 127.0.0.1. Rate-limit budgets: see
 [model_constraints.md](model_constraints.md).
 
 ## Data never in the repo

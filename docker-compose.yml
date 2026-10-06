@@ -9,12 +9,10 @@ x-server: &server
   build: {context: ., target: server}
   image: lisa-server
   restart: unless-stopped
-  # Servers get only the secrets they use; LLM keys in .env go to the agent alone.
+  # Each service gets only the secrets it uses: every server verifies tokens (LISA_AUTH_SECRET); graph-backed
+  # servers get the Neo4j login; only verifier + external get the CourtListener token; the LLM key goes to the agent.
   environment: &server-env
     LISA_AUTH_SECRET: ${LISA_AUTH_SECRET:?set LISA_AUTH_SECRET in .env}
-    COURTLISTENER_TOKEN: ${COURTLISTENER_TOKEN:-}
-    NEO4J_USER: ${NEO4J_USER:-neo4j}
-    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
     LISA_HOST: 0.0.0.0
     LISA_DATA_DIR: /data
     LISA_OUT_DIR: /app/out
@@ -26,6 +24,10 @@ x-server: &server
     - ./out:/app/out
   depends_on:
     jaeger: {condition: service_started}
+
+x-neo4j-login: &neo4j-login
+  NEO4J_USER: ${NEO4J_USER:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
 
 services:
   neo4j:
@@ -52,22 +54,24 @@ services:
 
   graph:
     <<: *server
-    environment: {<<: *server-env, LISA_SERVER: lisa.servers.graph_server}
+    environment: {<<: [*server-env, *neo4j-login], LISA_SERVER: lisa.servers.graph_server}
     ports: ["127.0.0.1:8101:8101"]
 
   verifier:
     <<: *server
-    environment: {<<: *server-env, LISA_SERVER: lisa.servers.citation_verifier}
+    environment: {<<: [*server-env, *neo4j-login], LISA_SERVER: lisa.servers.citation_verifier,
+                  COURTLISTENER_TOKEN: "${COURTLISTENER_TOKEN:-}"}
     ports: ["127.0.0.1:8102:8102"]
 
   analytics:
     <<: *server
-    environment: {<<: *server-env, LISA_SERVER: lisa.servers.analytics_server}
+    environment: {<<: [*server-env, *neo4j-login], LISA_SERVER: lisa.servers.analytics_server}
     ports: ["127.0.0.1:8103:8103"]
 
   external:
     <<: *server
-    environment: {<<: *server-env, LISA_SERVER: lisa.servers.external_law_server}
+    environment: {<<: *server-env, LISA_SERVER: lisa.servers.external_law_server,
+                  COURTLISTENER_TOKEN: "${COURTLISTENER_TOKEN:-}"}
     ports: ["127.0.0.1:8104:8104"]
 
   agent:
@@ -77,9 +81,14 @@ services:
       args: {CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.289}"}
     image: lisa-agent
     profiles: [agent]          # run on demand: docker compose run --rm agent "<question>"
-    env_file: .env
+    # No signing secret here: the agent uses a pre-issued researcher token (scripts/issue_token.py lisa-agent), so it
+    # cannot mint admin tokens. Only the SharedLLM key and that token are passed.
     environment:
-      <<: *server-env
+      SHAREDLLM_API_KEY: ${SHAREDLLM_API_KEY:?set SHAREDLLM_API_KEY in .env}
+      LISA_AGENT_TOKEN: ${LISA_AGENT_TOKEN:?set LISA_AGENT_TOKEN in .env (python scripts/issue_token.py lisa-agent)}
+      LISA_DATA_DIR: /data
+      LISA_OUT_DIR: /app/out
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       LISA_GRAPH_URL: http://graph:8101/mcp
       LISA_VERIFIER_URL: http://verifier:8102/mcp
       LISA_ANALYTICS_URL: http://analytics:8103/mcp

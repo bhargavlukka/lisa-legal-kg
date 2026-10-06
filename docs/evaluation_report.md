@@ -1,7 +1,8 @@
 # LISA evaluation report
 
 All numbers come from committed, reproducible runs (commands in the [README](../README.md#reproduce-the-evaluation)).
-Model for every LLM step: `gpt-oss:120b` through the SharedLLM gateway ([model_constraints.md](model_constraints.md)).
+Models, all through the SharedLLM gateway ([model_constraints.md](model_constraints.md)): extraction tier `gpt-oss:120b`
+(section 1); question answering, KG agent and RAG baseline, `~z-ai/glm-flash-latest` from the pool (sections 2-3).
 Raw reports: [eval/extraction_report.md](eval/extraction_report.md), [eval/qa_report.md](eval/qa_report.md).
 
 ## 1. Knowledge-graph extraction

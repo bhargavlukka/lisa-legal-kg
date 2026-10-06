@@ -28,7 +28,7 @@ An answer that cannot pass is salvaged to its verified parts or refused.
 ## Architecture in one paragraph
 
 A deterministic tier builds Case / Authority / Statute / Page nodes and CITES / MENTIONS_STATUTE edges from detected
-citations; an LLM tier (`gpt-oss:120b` through the SharedLLM gateway) adds doctrines, judges and FOLLOWS /
+citations; an LLM tier (through the SharedLLM gateway) adds doctrines, judges and FOLLOWS /
 DISTINGUISHES / OVERRULES, each kept only if its supporting quote is found on the page. Both tiers carry
 provenance and confidence and are stored separately, loaded into Neo4j or served from memory. Four MCP servers
 (graph, citation-verifier, analytics, external-law/CourtListener) expose the graph over HTTP with signed JWTs and
@@ -38,16 +38,16 @@ OpenTelemetry traces go to Jaeger. Details: [docs/architecture.md](docs/architec
 
 ## Setup
 
-Requirements: Python 3.12, the `LISA_Project_Package` (case data is **not** in this repo), a SharedLLM key plus an
-Ollama Cloud key (see [model_constraints.md](docs/model_constraints.md)), optionally a CourtListener token, Docker for
+Requirements: Python 3.12, the `LISA_Project_Package` (case data is **not** in this repo), a SharedLLM key (the
+model path is in [model_constraints.md](docs/model_constraints.md)), optionally a CourtListener token, Docker for
 the compose stack.
 
 ```bash
 py -3 -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev,agent,rag]"     # Linux/macOS: .venv/bin/python
-cp .env.example .env     # set LISA_DATA_DIR, NEO4J_PASSWORD, SHAREDLLM_API_KEY, OLLAMA_API_KEY, LISA_AUTH_SECRET,
+cp .env.example .env     # set LISA_DATA_DIR, NEO4J_PASSWORD, SHAREDLLM_API_KEY, LISA_AUTH_SECRET (>= 32 random chars),
                          # COURTLISTENER_TOKEN (optional)
-.venv/Scripts/python -m pytest                                 # ~240 tests, no network
+.venv/Scripts/python -m pytest                                 # ~257 tests, no network
 ```
 
 ## Build the graph
