@@ -58,7 +58,8 @@ def test_aggregate_and_markdown():
 def test_golden_set_is_well_formed():
     qs = load_golden(qa_cli.GOLDEN)
     assert len(qs) >= 25
-    assert {q["expect"] for q in qs} <= {"answer", "refuse", "disclaimer"}
+    assert {q["expect"] for q in qs} <= {"answer", "refuse", "disclaimer", "status"}
+    assert any(q["category"] == "status" for q in qs) and any(q.get("setup") for q in qs)   # spec Appendix A
     assert any(q["category"] == "cross_domain" for q in qs) and any(q["category"] == "external" for q in qs)
 
 
@@ -165,3 +166,44 @@ def test_report_merges_parallel_shards_into_one_system(tmp_path):
     qa_cli._append(eval_dir / "qa_kg_s2.jsonl", {"id": golden[1]["id"], **rec()})
     text = qa_cli.report(eval_dir, golden).read_text(encoding="utf-8")
     assert "kg: 2/2 questions run" in text and "kg_s2" not in text
+
+
+def test_status_question_needs_label_and_no_status_assertion():
+    from lisa.eval.qa import STATUS_LABEL
+    q = {"id": "q29", "category": "status", "expect": "status", "expected_cases": []}
+    labelled = f'Arambula-Bravo held X [1]. Legal status: each is "{STATUS_LABEL}".'
+    assert score(q, {"status": "verified", "text": labelled, "report": {}})["behaviour_ok"]
+    assert not score(q, {"status": "verified", "text": "It is still good law [1].", "report": {}})["behaviour_ok"]
+    assert not score(q, {"status": "refused", "text": labelled, "report": {}})["behaviour_ok"]
+
+
+def test_kg_runner_asks_setup_turns_in_one_session(tmp_path, monkeypatch):
+    import anyio  # noqa: F401  (the runner drives agent.ask through anyio.run)
+
+    import lisa.agent.agent as agent_mod
+    from lisa.agent.agent import Trajectory, TurnResult
+
+    asked = []
+
+    class FakeAgent:
+        def __init__(self, **kw):
+            pass
+
+        async def ask(self, question, memory=None):
+            asked.append((question, memory.name if memory else None, len(memory.turns) if memory else None))
+            t = Trajectory(model_calls=2, input_tokens=100, output_tokens=10)
+            r = TurnResult(question, "answer", "verified", {"answer": "a", "citations": []}, {}, 0, t, 1.5, "sid", 1)
+            if memory is not None:
+                memory.record(question, "answer", [], "verified", "sid")
+            return r
+
+    monkeypatch.setattr(agent_mod, "ResearchAgent", FakeAgent)
+    monkeypatch.setattr(qa_cli, "_servers_up", lambda a: [])
+    path = tmp_path / "qa_kg.jsonl"
+    q = {"id": "q30", "question": "Compare with the earlier case.", "setup": ["What did A hold?"]}
+    assert qa_cli.run_kg([q], path) == 0
+    (q1, s1, n1), (q2, s2, n2) = asked
+    assert (q1, q2) == ("What did A hold?", "Compare with the earlier case.") and s1 == s2 and (n1, n2) == (0, 1)
+    rec = json.loads(path.read_text())
+    assert rec["input_tokens"] == 200 and rec["model_calls"] == 4 and rec["latency_s"] == 3.0
+    assert rec["setup"][0]["status"] == "verified" and rec["session"] == s1

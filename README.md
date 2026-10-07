@@ -18,7 +18,7 @@ An answer that cannot pass is salvaged to its verified parts or refused.
 | Threat model | [docs/threat_model.md](docs/threat_model.md) |
 | Model-constraints memo | [docs/model_constraints.md](docs/model_constraints.md) |
 | Evaluation report (RAG vs KG, extraction P/R, failures) | [docs/evaluation_report.md](docs/evaluation_report.md), raw: [docs/eval/](docs/eval/) |
-| Golden question set (28) | [config/eval/golden_questions.yaml](config/eval/golden_questions.yaml) |
+| Golden question set (30) | [config/eval/golden_questions.yaml](config/eval/golden_questions.yaml) |
 | Graph build / LLM extraction | `src/lisa/graph`, `src/lisa/extract` |
 | MCP servers | `src/lisa/servers` (graph, citation_verifier, analytics_server, external_law_server) |
 | Agent: skill, subagent, memory, guardrails | `src/lisa/agent` (`.claude/skills/legal-research`, `subagents/`, `memory/`, `guardrails/`) |
