@@ -62,7 +62,8 @@ Run cost: 72 live requests + 295 cache hits for the final scoring runs; 1.48 M i
 
 ## 2. Question answering: KG agent vs RAG baseline
 
-**Setup.** Golden set of 28 questions (`config/eval/golden_questions.yaml`). Both systems use the same model,
+**Setup.** Golden set of 30 questions (`config/eval/golden_questions.yaml`); q29 and q30 cover the two remaining
+question types of spec Appendix A ("still good law?" and multi-turn research) and were added after the first KG run. Both systems use the same model,
 `~z-ai/glm-flash-latest` from the SharedLLM pool, and the same citation-verifier gate.
 
 | | KG agent | RAG baseline |
@@ -70,27 +71,28 @@ Run cost: 72 live requests + 295 cache hits for the final scoring runs; 1.48 M i
 | retrieval | Claude Agent SDK over 4 MCP servers (graph, verifier, analytics, external/CourtListener) and the `legal-research` skill | fastembed `BAAI/bge-small-en-v1.5` over page chunks, top 8 |
 | model calls / question | agent loop (12-74) | 1 |
 | gate | `verify_answer` called by the agent, then the harness gate | same gate on the single draft |
-| questions run | 28 / 28 | 28 / 28 |
+| questions run | 28 (first run), 30 (metered rerun) | 30 / 30 |
 
 Scoring (`src/lisa/eval/qa.py`): recall and precision count only citations in tier `verified_in_corpus` that the
-answer references by a `[n]` marker. Recall is averaged over the 24 questions with expected cases, precision over
-those that also cite at least one verified case (KG 24, RAG 14). `behaviour_ok`: `answer` -> status
-verified or salvaged; `refuse` -> no in-corpus case cited; `disclaimer` -> advice disclaimer present.
+answer references by a `[n]` marker. Recall is averaged over the questions with expected cases (26 of 30), precision
+over those that also cite at least one verified case. `behaviour_ok`: `answer` -> status
+verified or salvaged; `refuse` -> no in-corpus case cited; `disclaimer` -> advice disclaimer present; `status` ->
+answered, carries the provenance note ("not verified; may have subsequent treatment") and asserts no legal status.
 
-| metric | KG agent | KG agent, metered rerun | RAG |
+| metric | KG agent, first run | KG agent, metered rerun | RAG |
 |---|---|---|---|
-| n | 28 | 28 | 28 |
-| recall | **1.000** | 0.958 | 0.288 |
-| precision | 0.628 | 0.645 | 0.582 |
-| behaviour_ok | **0.964** | **0.964** | 0.643 |
-| answered (verified or salvaged) | 1.000 | 1.000 | 0.679 |
+| n | 28 | 30 | 30 |
+| recall | **1.000** | 0.962 | 0.266 |
+| precision | 0.628 | 0.639 | 0.509 |
+| behaviour_ok | 0.964 | **0.967** | 0.667 |
+| answered (verified or salvaged) | 1.000 | 1.000 | 0.700 |
 | unverified citations | 0 | 0 | 1 (q10) |
 | unqualified status claims | 0 | 0 | 0 |
-| latency mean / p50 / max, s | 716.6 / 502.2 / 2833.2 | 350.8 / 283.7 / 1183.7 | 9.0 / 6.5 / 56.5 |
-| model calls | 789 (per content block) | 324 (per API call) | 28 |
-| input / output tokens | not fully recorded | 7,142,732 / 757,541 | 90,627 / 11,272 |
-| **cost per query, USD** | - | **$0.0190** | **$0.00027** |
-| cost of the 28-question run, USD | - | $0.53 | $0.0076 |
+| latency mean / p50 / max, s | 716.6 / 502.2 / 2833.2 | 343.7 / 283.7 / 1183.7 | 8.6 / 6.3 / 56.5 |
+| model calls | 789 (per content block) | 351 (per API call) | 30 |
+| input / output tokens | not fully recorded | 7,542,547 / 824,478 | 95,948 / 11,839 |
+| **cost per query, USD** | - | **$0.0191** | **$0.00027** |
+| cost of the whole run, USD | - | $0.57 | $0.0080 |
 
 **Cost per query.** Price: the gateway's published rate for `~z-ai/glm-flash-latest`, $0.0214 per million input
 and $0.50 per million output tokens (`llm.pricing`, read from `GET /custom-openai/v1/models` on 2026-10-06). RAG cost
@@ -98,21 +100,32 @@ comes from the token counts of its run. The first KG run could not be costed: th
 on streamed replies and the Claude CLI always streams, so 23 of its 28 records had no input count. The agent now
 reaches the gateway through a local metering proxy (`src/lisa/agent/usage_proxy.py`) that requests each call
 non-streamed and logs exact usage per API message id to `out/llm_usage.jsonl`. The **metered rerun** repeated all
-28 questions through it; all 324 logged calls are attributed to a question via the CLI transcripts
-(`scripts/reconcile_usage.py`), so the KG cost above is measured, not estimated. A KG answer costs about 70 times a
+28 questions through it and then ran q29-q30. Every one of its 351 logged calls is attributed to a question (q01-q28
+through the CLI transcripts with `scripts/reconcile_usage.py`; q29-q30 recorded directly by the fixed agent, and the
+ledger totals equal the record totals), so the KG cost above is measured, not estimated. A KG answer costs about 70 times a
 RAG answer (input: about 255 k tokens per question, because every agent step re-sends the tool context) and takes
 minutes instead of seconds; in exchange it finds the citing cases that RAG cannot retrieve (below).
 
-The metered rerun reproduces the first run's quality: 28/28 verified, the same behaviour score, the same q27
+The metered rerun reproduces the first run's quality on q01-q28: 28/28 verified, the same behaviour score, the same q27
 failure. Its one recall miss is q23 (cross-corpus bridges): the answer names Pereira and Pereida as the strongest
 bridges, which is correct, but anchors every quote on the citing BIA decisions rather than on the two Supreme Court
 opinions, so the scorer (which counts only expected cases in tier `verified_in_corpus`) gives it 0. Its latency is
 lower because the three shards ran against a less loaded gateway and the four revision turns were shorter.
 
-KG statuses: 28 verified. RAG statuses: 9 verified, 10 salvaged (unsupported sentences removed), 9 refused (no
-draft passed the gate).
+**Appendix A: uncertainty and multi-turn (q29, q30).** q29 asks "Is Matter of Arambula-Bravo still good law?". The
+KG agent (verified, 188 s) traces all six citing decisions in the graph, reports only positive treatment through the
+latest corpus decision (2024), and states that current status cannot be verified because the corpus has no citator
+data; the rendered answer carries the provenance note and no status assertion. q30 is a two-turn research session
+(`setup` turn: "What did the Board hold in Matter of Arambula-Bravo?", then "Compare [M-F-O-] with the earlier case
+we discussed"). The harness runs both turns in one persisted `SessionMemory`; the agent recalls Arambula-Bravo from
+the session and compares the two holdings with verified quotes from both (recall 1.0; 299 s for both turns).
+RAG has no session memory: on q30 it never brings back the earlier case (recall 0), and on q29 it cites two later
+decisions but not Arambula-Bravo itself.
 
-By category (recall / behaviour_ok):
+KG statuses (metered rerun): 30 verified. RAG statuses: 9 verified, 12 salvaged (unsupported sentences removed),
+9 refused (no draft passed the gate).
+
+By category (recall / behaviour_ok; KG = first run for q01-q28, metered rerun for q29-q30):
 
 | category | n | KG agent | RAG |
 |---|---|---|---|
@@ -125,6 +138,8 @@ By category (recall / behaviour_ok):
 | advice | 1 | 1.000 / 1.000 | 0.000 / 1.000 |
 | negative | 1 | - / 0.000 | - / 0.000 |
 | injection | 1 | 1.000 / 1.000 | 0.000 / 1.000 |
+| status | 1 | 1.000 / 1.000 | 0.000 / 1.000 |
+| multi_turn | 1 | 1.000 / 1.000 | 0.000 / 1.000 |
 
 **Where RAG fails.**
 
@@ -265,9 +280,9 @@ bounded, matching is ReDoS-safe, unused citations are flagged, and external cita
 | run | model calls | input tokens | output tokens | cost, USD |
 |---|---|---|---|---|
 | KG agent (28 q) | 789 (per content block) | 352,922 (reported for 5 of 28 turns) | 738,635 | not measurable |
-| KG agent, metered rerun (28 q) | 324 | 7,142,732 | 757,541 | 0.53 |
+| KG agent, metered rerun (30 q) | 351 | 7,542,547 | 824,478 | 0.57 |
 | KG no-token (2 q) | 51 | not reported | 56,813 | not measurable |
-| RAG (28 q) | 28 | 90,627 | 11,272 | 0.0076 |
+| RAG (30 q) | 30 | 95,948 | 11,839 | 0.0080 |
 
 The first KG run's input total is a lower bound: the gateway reports `input_tokens: 0` on streamed replies on the
 Anthropic-compatible route (non-zero only for q15, q19, q20, q22, q24). The metering proxy fixes this for all later

@@ -14,6 +14,8 @@ import yaml
 from lisa.agent.guardrails.gate import DISCLAIMER
 from lisa.tools.verifier import MARKER, STATUS_CLAIM, STATUS_QUALIFIER, UNVERIFIED, VERIFIED, sentences
 
+STATUS_LABEL = "not verified; may have subsequent treatment"   # provenance note rendered with every answer (gate.py)
+
 ANSWERED = ("verified", "salvaged")
 VERIFY_TOOL = "mcp__verifier__verify_answer"
 
@@ -51,6 +53,9 @@ def score(q: dict, rec: dict, allowed_tools: set[str] | None = None) -> dict:
         behaviour = not cited                      # declined, or answered without inventing in-corpus support
     elif expect == "disclaimer":
         behaviour = DISCLAIMER in (rec.get("text") or "")
+    elif expect == "status":                       # "still good law?": provenance-labelled, status never asserted
+        text = rec.get("text") or ""
+        behaviour = status in ANSWERED and STATUS_LABEL in text and not unqualified_status_claims(text)
     else:
         behaviour = status in ANSWERED
     row = {"id": q["id"], "category": q.get("category"), "system": rec.get("system"), "status": status,

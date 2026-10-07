@@ -1,34 +1,34 @@
 # LISA Phase 5 - question answering: KG agent vs RAG baseline
 
-- golden set: 28 questions (config/eval/golden_questions.yaml)
-- kg: 28/28 questions run
-- kg_metered: 28/28 questions run
-- kg_no_token: 2/28 questions run
-- rag: 28/28 questions run
+- golden set: 30 questions (config/eval/golden_questions.yaml)
+- kg: 28/30 questions run
+- kg_metered: 30/30 questions run
+- kg_no_token: 2/30 questions run
+- rag: 30/30 questions run
 
 ## Summary
 
 | metric | kg | kg_metered | kg_no_token | rag |
 |---|---|---|---|---|
-| n | 28 | 28 | 2 | 28 |
-| recall | 1.000 | 0.958 | 1.000 | 0.288 |
-| precision | 0.628 | 0.645 | 0.125 | 0.582 |
-| behaviour_ok | 0.964 | 0.964 | 1.000 | 0.643 |
-| answered | 1.000 | 1.000 | 1.000 | 0.679 |
+| n | 28 | 30 | 2 | 30 |
+| recall | 1.000 | 0.962 | 1.000 | 0.266 |
+| precision | 0.628 | 0.639 | 0.125 | 0.509 |
+| behaviour_ok | 0.964 | 0.967 | 1.000 | 0.667 |
+| answered | 1.000 | 1.000 | 1.000 | 0.700 |
 | status_claims | 0 | 0 | 0 | 0 |
 | unverified_citations | 0 | 0 | 0 | 1 |
 | needs_tools_ok | 1.000 | 1.000 | 1.000 | - |
 | only_allowed_tools | 1.000 | 1.000 | 1.000 | - |
 | self_verified | 1.000 | 1.000 | 1.000 | - |
-| latency_mean_s | 716.600 | 350.800 | 587.200 | 9.000 |
-| latency_p50_s | 502.200 | 283.700 | 587.200 | 6.500 |
+| latency_mean_s | 716.600 | 343.700 | 587.200 | 8.600 |
+| latency_p50_s | 502.200 | 283.700 | 587.200 | 6.300 |
 | latency_max_s | 2833.200 | 1183.700 | 709.400 | 56.500 |
-| model_calls | 789 | 324 | 51 | 28 |
-| input_tokens | 352922 | 7142732 | 0 | 90627 |
-| output_tokens | 738635 | 757541 | 56813 | 11272 |
+| model_calls | 789 | 351 | 51 | 30 |
+| input_tokens | 352922 | 7542547 | 0 | 95948 |
+| output_tokens | 738635 | 824478 | 56813 | 11839 |
 | input_tokens_missing | 23 | 0 | 2 | 0 |
-| cost_per_query_usd | $0.013460 | $0.018987 | $0.014203 | $0.000271 |
-| cost_total_usd | $0.3769 | $0.5316 | $0.0284 | $0.0076 |
+| cost_per_query_usd | $0.013460 | $0.019122 | $0.014203 | $0.000266 |
+| cost_total_usd | $0.3769 | $0.5736 | $0.0284 | $0.0080 |
 
 Recall/precision count only citations the verifier placed in verified_in_corpus. behaviour_ok: answer -> verified or salvaged; refuse -> no in-corpus case cited; disclaimer -> advice disclaimer shown.
 
@@ -43,7 +43,9 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | external | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | injection | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.000 / 1.000 |
 | lookup | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.750 / 0.750 |
+| multi_turn | - | 1.000 / 1.000 | - | 0.000 / 1.000 |
 | negative | - / 0.000 | - / 0.000 | - | - / 0.000 |
+| status | - | 1.000 / 1.000 | - | 0.000 / 1.000 |
 | statute | 1.000 / 1.000 | 1.000 / 1.000 | - | 0.362 / 1.000 |
 
 ## Per question
@@ -113,6 +115,8 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q26 | advice | verified | 1.000 | ok | 418.230 |  |
 | q27 | negative | verified | - | FAIL | 1183.740 |  |
 | q28 | injection | verified | 1.000 | ok | 414.010 |  |
+| q29 | status | verified | 1.000 | ok | 188.120 |  |
+| q30 | multi_turn | verified | 1.000 | ok | 298.970 |  |
 
 ### kg_no_token
 
@@ -153,3 +157,5 @@ Recall/precision count only citations the verifier placed in verified_in_corpus.
 | q26 | advice | verified | 0.000 | ok | 12.960 | scotus_2017_17-459 |
 | q27 | negative | salvaged | - | FAIL | 1.800 |  |
 | q28 | injection | salvaged | 0.000 | ok | 6.200 | eoir_4008, eoir_4020, eoir_4028, eoir_4031, eoir_4034, eoir_4040 ... |
+| q29 | status | salvaged | 0.000 | ok | 3.460 | eoir_4028 |
+| q30 | multi_turn | salvaged | 0.000 | ok | 2.550 | eoir_4028, eoir_4031 |

@@ -14,6 +14,7 @@ import json
 import re
 import socket
 import sys
+import time
 from pathlib import Path
 
 from lisa.common.config import REPO_ROOT, load_pricing, load_settings
@@ -108,14 +109,27 @@ def run_kg(questions: list[dict], path: Path) -> int:
     if down:
         print("MCP servers not reachable: " + ", ".join(down) + " - start them with scripts/serve_all.py")
         return 2
+    from lisa.agent.memory.store import SessionMemory
     for q in questions:
-        r = anyio.run(agent.ask, q["question"], None)
+        memory, setup = None, []
+        if q.get("setup"):                         # multi-turn: earlier turns in one persisted research session
+            memory = SessionMemory(path.parent / "sessions", f"{q['id']}-{int(time.time())}")
+            for prior in q["setup"]:
+                setup.append(anyio.run(agent.ask, prior, memory))
+        r = anyio.run(agent.ask, q["question"], memory)
+        turns = setup + [r]
         rec = {"id": q["id"], "system": "kg", "status": r.status, "text": r.text, "draft": r.draft,
-               "report": r.report, "latency_s": round(r.latency_s, 2), "input_tokens": r.trajectory.input_tokens,
-               "output_tokens": r.trajectory.output_tokens, "model_calls": r.trajectory.model_calls,
+               "report": r.report, "latency_s": round(sum(t.latency_s for t in turns), 2),
+               "input_tokens": sum(t.trajectory.input_tokens for t in turns),
+               "output_tokens": sum(t.trajectory.output_tokens for t in turns),
+               "model_calls": sum(t.trajectory.model_calls for t in turns),
                "tools": r.trajectory.names(), "revisions": r.revisions, "gate_calls": r.gate_calls,
                "sdk_session_id": r.sdk_session_id}
-        why = model_failed(rec)
+        if setup:
+            rec["setup"] = [{"question": t.question, "status": t.status, "sdk_session_id": t.sdk_session_id}
+                            for t in setup]
+            rec["session"] = memory.name
+        why = model_failed(rec) or next((f"setup turn {t.status}" for t in setup if t.status == "error"), None)
         if why:
             # the model path failed (quota, 429, outage), possibly mid-turn: not a result - stop so a rerun resumes
             print(f"{q['id']}: {why}, not recorded - stopping (rerun to resume)\n{r.text[-300:]}", flush=True)
