@@ -52,3 +52,14 @@ agent:
   max_revisions: 2
   sessions_dir: sessions          # under out_dir; persisted research-session memory
   usage_proxy: true               # local proxy: streamed gateway replies omit input_tokens (src/lisa/agent/usage_proxy.py)
+  # glm-flash's hidden reasoning is unbounded on the Anthropic route (30-85 s per call; a reasoning cap is ignored
+  # there). route: openai makes the proxy translate each call to the OpenAI route, which honours the cap (~5 s/call).
+  # LISA_AGENT_ROUTE=anthropic reverts.
+  route: openai
+  openai_url: https://api.sharedllm.com/custom-openai/v1/chat/completions
+  reasoning: {max_tokens: 200}
+  # Fast mode (answers in about a minute): the harness gate verifies (the model does not re-send its draft to
+  # verify_answer), concise answers built on the graph's evidence quotes, no model revision after soft_deadline_s
+  # (failed sentences are salvaged in code), and a hard cut-off. LISA_AGENT_FAST=0 runs the full evaluated mode.
+  # wrapup_s: still researching -> interrupt and ask for the final answer from what was found (answers < 1 min).
+  fast: {enabled: true, max_turns: 12, wrapup_s: 35, soft_deadline_s: 35, hard_deadline_s: 58}

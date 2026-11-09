@@ -51,6 +51,10 @@ def parse_final(text: str) -> dict:
     return {"answer": (text or "").strip(), "citations": [], "parsed": False}
 
 
+WRAPUP_PROMPT = ("Time is up. Do not call any more tools. Using only what you have already found, output the final "
+                 "JSON block now: a short answer with [n] markers and citations whose quotes you have seen verbatim.")
+
+
 def revision_prompt(report: dict) -> str:
     lines = ["Your draft FAILED the citation-verifier. Fix every problem below, re-run verify_answer, then reply "
              "with the corrected final JSON only."]

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LISA Research</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#1b1f24;--muted:#5d6672;--line:#e3e6ea;--accent:#2f5bd3;--ok:#1f8a4c;--warn:#b26a00;--bad:#c0392b;--chip:#eef2fb;--soft:#f1f3f6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1216;--panel:#171b21;--ink:#e6e9ee;--muted:#98a2ae;--line:#2a3039;--accent:#7aa2ff;--ok:#4cc38a;--warn:#e0a03a;--bad:#ff7a6b;--chip:#1e2633;--soft:#1c2128}}
+:root[data-theme="dark"]{--bg:#0f1216;--panel:#171b21;--ink:#e6e9ee;--muted:#98a2ae;--line:#2a3039;--accent:#7aa2ff;--ok:#4cc38a;--warn:#e0a03a;--bad:#ff7a6b;--chip:#1e2633;--soft:#1c2128}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{padding:14px 24px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:20px;letter-spacing:.02em}
+header .tag{color:var(--muted);font-size:13px;flex:1;min-width:220px}
+.hright{display:flex;align-items:center;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted);background:var(--soft);cursor:default;position:relative}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.dot.up{background:var(--ok)}.dot.down{background:var(--bad)}.dot.part{background:var(--warn)}
+.pill .pop{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;z-index:5;width:max-content;max-width:300px;box-shadow:0 6px 20px rgba(0,0,0,.12);color:var(--ink)}
+.pill:hover .pop,.pill:focus .pop{display:block}
+.pop div{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px}
+.pop small{color:var(--muted)}
+.themebtn{border:1px solid var(--line);background:var(--soft);color:var(--muted);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer}
+main{max-width:1280px;margin:0 auto;padding:16px}
+.how{display:flex;align-items:stretch;gap:0;margin:0 0 14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.how .step{flex:1;min-width:150px;display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);background:var(--panel);transition:background .2s,border-color .2s,color .2s}
+.how .step:first-child{border-radius:10px 0 0 10px}.how .step:last-child{border-radius:0 10px 10px 0}
+.how .step+.step{border-left:0}
+.how .n{flex:none;width:20px;height:20px;border-radius:50%;background:var(--soft);border:1px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--muted)}
+.how b{display:block;color:var(--ink);font-size:13px}
+.how .step.active{border-color:var(--accent);background:var(--chip)}
+.how .step.active .n{background:var(--accent);border-color:var(--accent);color:#fff}
+.how .step.done .n{background:var(--ok);border-color:var(--ok);color:#fff}
+@media (max-width:700px){.how .step{min-width:46%;border-radius:0!important;border-left:1px solid var(--line)!important}}
+.ask{display:flex;gap:8px}
+.ask textarea{flex:1;resize:vertical;min-height:52px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit}
+.ask button{padding:0 22px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:600;font-size:15px;cursor:pointer}
+.ask button:disabled{opacity:.5;cursor:default}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 16px}
+.chips button{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer;text-align:left}
+.chips button i{font-style:normal;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-right:6px}
+.chips button:hover{border-color:var(--accent)}
+#thread{display:flex;flex-direction:column;gap:18px;margin-bottom:18px}
+.intro{color:var(--muted);text-align:center;padding:28px 10px;border:1px dashed var(--line);border-radius:12px}
+.tbox{display:flex;flex-direction:column;gap:10px}
+.qbub{align-self:flex-end;max-width:min(760px,90%);background:var(--accent);color:#fff;padding:10px 14px;border-radius:14px 14px 4px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.qbub small{display:block;opacity:.75;font-size:11.5px;margin-top:2px}
+.turn{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.thead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;color:var(--muted)}
+.thead b{color:var(--ink)}
+.timer{font-variant-numeric:tabular-nums;color:var(--ink)}
+details.steps{border:1px solid var(--line);border-radius:10px;background:var(--soft);margin:6px 0 10px}
+details.steps summary{cursor:pointer;padding:7px 12px;font-size:13px;color:var(--muted);user-select:none}
+details.steps ul{list-style:none;margin:0;padding:0 12px 6px;max-height:50vh;overflow:auto}
+.out.empty{color:var(--muted)}
+.composer{position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 80%,transparent);padding:10px 0 14px}
+.toolbar{display:flex;justify-content:flex-end;margin:-4px 0 8px}
+.toolbar button{border:0;background:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
+.feed li{padding:7px 0 7px 26px;border-top:1px solid var(--line);position:relative;font-size:14px}
+.feed li:first-child{border-top:0}
+.feed li::before{content:attr(data-icon);position:absolute;left:0;top:7px;width:20px;text-align:center}
+.feed .t{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;margin-right:6px}
+.feed .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.feed .sub div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed .note{font-style:italic;color:var(--muted)}
+.feed .ok{color:var(--ok)}.feed .bad{color:var(--bad)}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite;margin-left:6px;vertical-align:-1px}
+@keyframes s{to{transform:rotate(360deg)}}
+.answer{white-space:pre-wrap;font-size:15px;overflow-wrap:anywhere}
+.answer .m,.srcs .m{color:var(--accent);font-weight:600}
+.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:10px}
+.b-verified{background:rgba(31,138,76,.15);color:var(--ok)}.b-salvaged{background:rgba(178,106,0,.15);color:var(--warn)}
+.b-refused,.b-error{background:rgba(192,57,43,.15);color:var(--bad)}
+.srch{margin:16px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.srcs{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.srcs li{display:flex;gap:10px;align-items:baseline;padding:7px 10px;font-size:14px;border-top:1px solid var(--line)}
+.srcs li:first-child{border-top:0}
+.srcs .name{flex:1;min-width:0;overflow-wrap:anywhere}
+.tier{flex:none;font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 9px;white-space:nowrap}
+.t-ok{background:rgba(31,138,76,.15);color:var(--ok)}.t-ext{background:rgba(178,106,0,.15);color:var(--warn)}.t-bad{background:rgba(192,57,43,.15);color:var(--bad)}
+@media (max-width:520px){.srcs li{flex-wrap:wrap}.tier{margin-left:28px}}
+.notes{white-space:pre-wrap;color:var(--muted);font-size:13px;margin-top:12px}
+.empty{color:var(--muted)}
+.meta{color:var(--muted);font-size:13px;margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>LISA</h1>
+  <span class="tag">Legal knowledge-graph research agent: 30 BIA decisions + 30 Supreme Court opinions. Every citation is checked by a verifier.</span>
+  <div class="hright">
+    <span class="pill" id="svc" tabindex="0"><span class="dot" id="svcdot"></span><span id="svctxt">Checking servers...</span>
+      <span class="pop" id="svcpop"></span></span>
+    <button class="themebtn" id="theme" type="button" title="Switch light / dark">Theme</button>
+  </div>
+</header>
+<main>
+  <div class="how" id="how" aria-label="How LISA works">
+    <div class="step" data-stage="tools"><span class="n">1</span><span><b>Graph tools</b>searches the case graph, follows citations, reads case pages</span></div>
+    <div class="step" data-stage="draft"><span class="n">2</span><span><b>Draft</b>writes an answer where every claim has a [n] citation</span></div>
+    <div class="step" data-stage="verify"><span class="n">3</span><span><b>Citation verifier</b>checks each citation and quote against the case text</span></div>
+    <div class="step" data-stage="answer"><span class="n">4</span><span><b>Answer</b>only verified citations are shown, each with its check result</span></div>
+  </div>
+  <div class="toolbar"><button type="button" id="clear">Clear conversation</button></div>
+  <div id="thread"><div class="intro" id="intro">Ask a question below. Each answer stays here, with the steps LISA took to find it.</div></div>
+  <div class="composer">
+    <div class="chips" id="chips"></div>
+    <form class="ask" id="f">
+      <textarea id="q" placeholder="Ask a legal research question..." required></textarea>
+      <button id="go">Ask</button>
+    </form>
+  </div>
+</main>
+<script>
+// [label, question]: Appendix A question types, cases that exist in the corpus (out/graph_all.json)
+const EXAMPLES=[
+  ["Citing cases","Which BIA decisions cite Sessions v. Dimaya on the residual clause of 18 U.S.C. 16(b)?"],
+  ["Case summary","What did the Supreme Court decide in Campos-Chaves v. Garland?"],
+  ["Lookup","What is Matter of Yajure Hurtado about?"],
+  ["Analytics","Which case in the corpus is the most cited precedent?"],
+  ["Precedent chain","Trace the citation path from Matter of Laparra to Supreme Court precedent on notices to appear."],
+  ["Still good law?","Is Matter of Arambula-Bravo, 28 I&N Dec. 388, still good law?"]];
+const SERVERS=[[8101,"Graph server","search cases, citations, case pages"],[8102,"Citation verifier","checks every citation"],[8103,"Analytics server","rankings, statute counts"],[8104,"External law server","CourtListener lookups"]];
+const VERBS={search_cases:"Searching the knowledge graph for",search_case_text:"Searching case text for",get_case:"Opening case record",read_page:"Reading",find_citing_cases:"Finding cases that cite",find_cited_cases:"Finding authorities cited by",precedent_chain:"Tracing the precedent chain from",verify_answer:"Checking every citation in the draft",verify_citation:"Checking citation",most_cited_precedents:"Ranking the most-cited precedents",statute_frequency:"Counting statute mentions",doctrine_influence:"Measuring doctrine influence",cross_corpus_bridges:"Finding BIA <-> Supreme Court links",resolve_citation:"Looking up on CourtListener",search_opinions:"Searching CourtListener for",get_opinion_cluster:"Fetching CourtListener opinion",get_docket:"Fetching CourtListener docket",quota_status:"Checking CourtListener quota",Agent:"Handing off to the citation-chaser subagent",Task:"Handing off to a subagent",Skill:"Loading the legal-research skill"};
+const $=id=>document.getElementById(id);
+function fmt(sec){sec=Math.round(Number(sec)||0);const m=Math.floor(sec/60),r=sec%60;return m?`${m} min${r?` ${r} sec`:""}`:`${r} sec`}
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const marks=h=>h.replace(/\[(\d+(?:,\s*\d+)*)\]/g,'<span class="m">[$1]</span>');
+EXAMPLES.forEach(([lab,x])=>{const b=document.createElement("button");b.type="button";b.innerHTML=`<i>${esc(lab)}</i>${esc(x)}`;b.title=x;b.onclick=()=>{$("q").value=x;$("q").focus()};$("chips").append(b)});
+
+// ---- theme toggle (auto -> light -> dark), remembered per browser when storage is available
+const THEMES=["auto","light","dark"];let theme="auto";
+try{theme=localStorage.getItem("lisa-theme")||"auto"}catch(_){}
+function applyTheme(){if(theme==="auto")document.documentElement.removeAttribute("data-theme");else document.documentElement.dataset.theme=theme;$("theme").textContent="Theme: "+theme}
+$("theme").onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%3];try{localStorage.setItem("lisa-theme",theme)}catch(_){}applyTheme()};
+applyTheme();
+
+// ---- server status pill: any HTTP answer (even 401/404) means the server is listening
+async function probe(port){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),2500);
+  try{await fetch(`http://127.0.0.1:${port}/`,{mode:"no-cors",cache:"no-store",signal:c.signal});return true}catch(_){return false}finally{clearTimeout(t)}
+}
+async function checkServers(){
+  const up=await Promise.all(SERVERS.map(s=>probe(s[0])));const n=up.filter(Boolean).length;
+  $("svcdot").className="dot "+(n===4?"up":n?"part":"down");
+  $("svctxt").textContent=`${n}/4 MCP servers up`;
+  $("svcpop").innerHTML="<small>LISA's agent talks to these four tool servers:</small>"+SERVERS.map((s,i)=>`<div><span class="dot ${up[i]?"up":"down"}"></span><span><b>${s[1]}</b> :${s[0]} <small>${s[2]}</small></span></div>`).join("");
+}
+checkServers();setInterval(checkServers,20000);
+
+// ---- "How LISA works" strip follows the live run
+const STAGES=["tools","draft","verify","answer"];
+function stage(s,finished){
+  const i=STAGES.indexOf(s);
+  document.querySelectorAll("#how .step").forEach((el,j)=>{el.classList.toggle("active",j===i&&!finished);el.classList.toggle("done",j<i||(finished&&j<=i))});
+}
+function stageReset(){document.querySelectorAll("#how .step").forEach(el=>el.classList.remove("active","done"))}
+
+let t0=0,tick=null,thinking=null,es=null,mine=false,lastMine="",cur=null;
+function short(name){return name.replace(/^mcp__\w+?__/,"")}
+function describe(name,input){
+  const n=short(name),v=VERBS[n]||("Calling "+n);input=input||{};
+  if(n==="read_page")return `${v} page ${input.page} of ${esc(input.case_id)}`;
+  if(n==="Skill")return v;
+  if(n==="Agent"||n==="Task")return `${v}: ${esc((input.description||input.prompt||"").slice(0,90))}`;
+  const arg=input.query||input.case_id||input.citation||input.name||"";
+  return arg?`${v} <b>${esc(arg)}</b>`:v;
+}
+function add(icon,html,sub){
+  if(!cur)begin("");
+  const ul=cur.feed;const li=document.createElement("li");li.dataset.icon=icon;cur.count.textContent=ul.children.length+1;
+  const t=fmt((Date.now()-t0)/1000);
+  li.innerHTML=`<span class="t">${t}</span>${html}`+(sub?`<div class="sub">${sub}</div>`:"");
+  ul.append(li);ul.scrollTop=ul.scrollHeight;return li;
+}
+const open={};
+function onEvent(e){
+  switch(e.type){
+    case "start":stage("tools");add("▶","Started research");break;
+    case "model_start":thinking=add("🧠",'Thinking<span class="spin"></span>');break;
+    case "model_end":{
+      const msg=`Thought for ${fmt(e.s)}`+(e.tools&&e.tools.length?` → decided to use <b>${e.tools.map(short).map(esc).join(", ")}</b>`:" → writing");
+      if(thinking){thinking.innerHTML=thinking.innerHTML.replace(/Thinking<span class="spin"><\/span>/,msg);thinking=null}else add("🧠",msg);break}
+    case "note":add("💬",`<span class="note">${esc(e.text)}</span>`);break;
+    case "tool_start":{
+      const n=short(e.tool||"");stage(/^verify_/.test(n)?"verify":"tools");
+      const li=add(e.subagent?"↳":"🔧",describe(e.tool,e.input)+'<span class="spin"></span>');(open[e.tool]=open[e.tool]||[]).push(li);break}
+    case "tool_end":{
+      const li=(open[e.tool]||[]).shift();
+      const sub=[e.headline?`<div>${esc(e.headline)} · ${e.ms} ms</div>`:`<div>${e.ms} ms</div>`].concat((e.items||[]).map(x=>`<div>• ${esc(x)}</div>`)).join("");
+      if(li){li.querySelector(".spin")?.remove();li.insertAdjacentHTML("beforeend",`<div class="sub">${sub}</div>`)}break}
+    case "draft":stage("draft");add("📝",`Draft answer ready with ${e.citations} citation(s)`);break;
+    case "verify":stage("verify");add(e.passed?"✅":"⚠️",e.passed?'<span class="ok">Citation verifier: every citation checks out</span>':`<span class="bad">Citation verifier found ${(e.problems||[]).length} problem(s)</span>`,(e.problems||[]).map(p=>`<div>• ${esc(p.detail||p.kind)}</div>`).join(""));break;
+    case "revision":stage("draft");add("✏️",`Revising the answer (attempt ${e.n})`);break;
+    case "wrapup":add("⏩",`${fmt(e.after_s)} reached: telling LISA to write the answer from what it has found`);break;
+    case "timeout":add("⏱️",`Time limit reached (${fmt(e.after_s)}): verifying the latest draft`);break;
+    case "gate":stage("answer");add("🛡️",`Gate decision: <b>${esc(e.status)}</b>`);break;
+    case "done":finish(e);break;
+  }
+}
+// One card per question: the question bubble, then LISA's card with its live steps and the answer
+function turnHTML(q,when){
+  return `<div class="qbub">${esc(q||"(question asked elsewhere)")}<small>${esc(when)}</small></div>
+  <div class="turn"><div class="thead"><span><b>LISA</b> <span class="state">researching...</span></span><span class="timer"></span></div>
+  <details class="steps" open><summary>What LISA did: <span class="count">0</span> steps</summary><ul class="feed"></ul></details>
+  <div class="out empty">Researching...</div></div>`;
+}
+function begin(q){
+  $("intro")?.remove();
+  const box=document.createElement("div");box.className="tbox";
+  box.innerHTML=turnHTML(q,new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}));
+  $("thread").append(box);
+  cur={box,feed:box.querySelector(".feed"),out:box.querySelector(".out"),timer:box.querySelector(".timer"),
+       state:box.querySelector(".state"),count:box.querySelector(".count"),details:box.querySelector("details")};
+  Object.keys(open).forEach(k=>delete open[k]);thinking=null;stageReset();
+  t0=Date.now();clearInterval(tick);const c=cur;tick=setInterval(()=>c.timer.textContent=fmt((Date.now()-t0)/1000),500);
+  box.scrollIntoView({behavior:"smooth",block:"start"});
+}
+// Split the gate's rendered text into: answer body, "Sources (checked by the citation-verifier):" list, trailing notes
+const SRC_HEAD="Sources (checked by the citation-verifier):";
+function renderAnswer(text){
+  text=String(text??"");const at=text.indexOf(SRC_HEAD);
+  if(at<0)return `<div class="answer">${marks(esc(text.trim()))}</div>`;
+  const body=text.slice(0,at).trim(),lines=text.slice(at+SRC_HEAD.length).replace(/^\n+/,"").split("\n");
+  const src=[];let i=0;
+  for(;i<lines.length;i++){const m=lines[i].match(/^\[(\d+)\]\s*(.*?)\s+-\s+(verified in-corpus|resolved externally.*|unverified)\s*$/);
+    if(m)src.push(m);else if(/^\[\d+\]/.test(lines[i]))src.push([lines[i],"?",lines[i].replace(/^\[\d+\]\s*/,""),""]);else break}
+  const rest=lines.slice(i).join("\n").trim();
+  const tier=t=>!t?"":t.startsWith("verified")?`<span class="tier t-ok">✓ verified in-corpus</span>`:t.startsWith("resolved")?`<span class="tier t-ext">resolved externally</span>`:`<span class="tier t-bad">unverified</span>`;
+  const list=src.length?`<div class="srch">Sources, checked by the citation-verifier</div><ul class="srcs">`+src.map(m=>`<li><span class="m">[${esc(m[1])}]</span><span class="name">${esc(m[2])}</span>${tier(m[3])}</li>`).join("")+"</ul>":"";
+  return `<div class="answer">${marks(esc(body))}</div>${list}`+(rest?`<div class="notes">${esc(rest)}</div>`:"");
+}
+function finish(e){
+  clearInterval(tick);if(mine){es&&es.close();mine=false}$("go").disabled=false;
+  add(e.status==="verified"?"🏁":"■",`Finished: ${esc(e.status)}`);
+  if(e.status==="error")stageReset();else stage("answer",true);
+  cur.timer.textContent=e.latency_s!=null?`Answered in ${fmt(e.latency_s)}`:"";
+  cur.state.textContent=e.status==="error"?"error":"answered";
+  cur.out.className="out";
+  cur.out.innerHTML=`<span class="badge b-${esc(e.status)}">${esc(e.status)}</span>${renderAnswer(e.text)}`+
+    (e.latency_s!=null?`<div class="meta">Answered in ${fmt(e.latency_s)} · ${e.model_calls} model calls · ${e.tools} tool calls · ${e.revisions} revision(s)</div>`:"");
+  cur.details.open=false;
+  saveHistory();
+  cur.box.scrollIntoView({behavior:"smooth",block:"start"});cur=null;
+}
+// The conversation survives a page reload (this browser only); "Clear conversation" empties it
+const INTRO='<div class="intro" id="intro">Ask a question below. Each answer stays here, with the steps LISA took to find it.</div>';
+function saveHistory(){try{localStorage.setItem("lisa-thread",$("thread").innerHTML)}catch(_){}}
+try{const h=localStorage.getItem("lisa-thread");if(h&&h.includes("tbox"))$("thread").innerHTML=h}catch(_){}
+document.querySelectorAll("#thread .state").forEach(el=>{if(el.textContent==="researching..."){el.textContent="interrupted";el.closest(".turn").querySelector(".out").textContent="This question was interrupted by a page reload."}});
+$("clear").onclick=()=>{if(cur)return;$("thread").innerHTML=INTRO;try{localStorage.removeItem("lisa-thread")}catch(_){}};
+$("f").onsubmit=ev=>{
+  ev.preventDefault();const q=$("q").value.trim();if(!q)return;
+  $("go").disabled=true;mine=true;lastMine=q;$("q").value="";begin(q);
+  es=new EventSource("/api/ask?"+new URLSearchParams({q,session:"web"}));
+  es.onmessage=m=>onEvent(JSON.parse(m.data));
+  es.onerror=()=>{if(mine&&cur)finish({status:"error",text:"Lost connection to the LISA server."})};
+};
+// runs started elsewhere (other tabs, test scripts) show up here too
+const live=new EventSource("/api/live");
+live.onmessage=m=>{const e=JSON.parse(m.data);
+  if(mine||(e.type==="done"&&e.question===lastMine))return;
+  if(e.type==="start"){lastMine="";$("go").disabled=true;begin(e.question)}
+  else if(!cur)begin("");
+  onEvent(e)};
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("f").requestSubmit()}});
+</script>
+</body>
+</html>

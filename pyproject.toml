@@ -28,3 +28,4 @@ testpaths = ["tests"]
 
 [tool.setuptools.package-data]
 "lisa.extract" = ["prompts/*.md", "schema_signatures.json"]
+"lisa.web" = ["static/*"]
