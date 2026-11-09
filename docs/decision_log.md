@@ -157,3 +157,41 @@ Context: the first CI stack run showed the servers could not write to the `./out
 Decision: compose runs every container as `${LISA_UID:-10001}:${LISA_GID:-10001}`; the agent gets `HOME=/tmp` for
 the claude CLI state.
 Consequences: on Linux, `.env` sets `LISA_UID` / `LISA_GID` to the host user; Docker Desktop works with the defaults.
+
+## 2026-11-09 — Reasoning-capped model route through the local proxy
+Context: reviewers asked for answers under one minute; a turn took 4-6 minutes. Measured: tools and the verifier take
+milliseconds; glm-flash's hidden reasoning is unbounded on the SharedLLM Anthropic route (single calls 30-85 s, one
+plain prompt reasoned for 74 s with no output). The gateway's Anthropic route ignores `reasoning` / `effort` caps
+(31-150 s with `reasoning.max_tokens: 200`); its OpenAI-compatible `custom-openai` route honours them (4-6 s).
+Alternatives: a different (non-reasoning) model - changes the spec's standard model path; prompt-only brevity - does
+not bound hidden reasoning; dropping the Agent SDK for a hand-written loop - violates spec 4.3.
+Decision: `agent.route: openai` makes the existing local proxy (`usage_proxy.py`, spec 4.3 allows one) translate
+each Anthropic Messages call to chat.completions with `reasoning: {max_tokens: 200}` and back (tools, parallel tool
+calls, tool results, stop reasons, usage), then replay it to the CLI as SSE. Same model, same gateway, virtual key only.
+Consequences: per-call latency 1-6 s; `LISA_AGENT_ROUTE=anthropic` restores the original path; hidden reasoning text
+is not returned (it was never shown); image blocks are not supported on this route (none are used).
+
+## 2026-11-09 — Fast mode with deadlines, verification kept in code
+Context: even with fast calls, the model wrote each answer up to three times (draft sent to `verify_answer`, final
+JSON, revisions) and some research loops ran long.
+Decision: `agent.fast` (on by default; `LISA_AGENT_FAST=0` runs the full evaluated mode): the harness gate verifies
+every draft and the model's own `verify_answer` call is denied; concise answers that cite each listed case with the
+graph's evidence quote; at `wrapup_s` (30 s) an agent still researching is interrupted and asked for its final JSON;
+no model revision after `soft_deadline_s` (30 s), failing sentences are salvaged in code; `hard_deadline_s` (52 s, leaving room for the final check)
+cuts the turn and verifies the latest draft. Salvage also drops sentences carrying a flagged quotation or bare case
+citation, so a mostly correct draft is trimmed instead of refused.
+Consequences: every golden question answered under a minute (evaluation report section 5); the trajectory check
+"model called verify_answer" no longer applies in fast mode (the code gate still runs before every answer); recall on
+long lists depends on the prompt and is reported separately from the full mode.
+
+## 2026-11-09 — Live web UI over server-sent events
+Context: reviewers asked to see what the agent is doing while it works.
+Alternatives: a CLI progress printout - not presentable; polling Jaeger traces - delayed and technical; a JS
+framework front end - a build step and dependencies for one page.
+Decision: `ResearchAgent.ask` emits progress events (tool start/end, model call start/end, draft, verifier result,
+revision, wrap-up, gate decision) from the existing hooks and proxy; `scripts/web.py` (Starlette, already a
+dependency) streams them over SSE (`/api/ask`, plus `/api/live` for runs started elsewhere) to one static HTML page:
+a conversation thread where each answer keeps its own steps, timing and verifier-tagged sources.
+Consequences: no new dependencies; one question runs at a time per server; compose has an opt-in `web` service
+(`--profile web`) because `scripts/demo.sh` runs the UI on the host on the same port and the container's pre-issued
+token expires after `auth.token_ttl_s`.

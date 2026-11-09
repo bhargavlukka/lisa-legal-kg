@@ -17,10 +17,12 @@ flowchart LR
     end
     subgraph Agent["Research agent (Claude Agent SDK)"]
       AG["ResearchAgent.ask<br/>legal-research skill<br/>citation-chaser subagent"]
-      GATE["Code gate: verify_answer -><br/>revise (x2) -> salvage -> refuse<br/>status note + advice disclaimer"]
+      GATE["Code gate: verify_answer -><br/>revise (x2) -> salvage -> refuse<br/>status note + advice disclaimer<br/>fast mode: wrap-up 30 s, cut-off 52 s"]
+      PX["usage proxy<br/>metering + Anthropic-to-OpenAI translation<br/>reasoning cap 200 tokens"]
       MEM[("out/sessions/*.json<br/>session memory")]
     end
     J["Jaeger (OTLP/HTTP :4318)<br/>+ out/traces/*.jsonl"]
+    UI["Web UI :8200 (scripts/web.py)<br/>live steps over SSE,<br/>conversation thread"]
     EV["Evaluation<br/>eval_extraction.py (gold P/R)<br/>eval_qa.py: KG agent vs RAG baseline"]
   end
   LLM["SharedLLM gateway (pool)<br/>api.sharedllm.com<br/>~z-ai/glm-flash-latest"]
@@ -35,7 +37,9 @@ flowchart LR
   NEO -. "backend: neo4j" .-> G & A
   X <--> CL
   V -->|"out-of-corpus cites<br/>(same client + cache)"| CL
-  AG <-->|"Anthropic-compatible /anthropic<br/>virtual key only"| LLM
+  AG <--> PX
+  PX <-->|"custom-openai chat.completions<br/>(or /anthropic), virtual key only"| LLM
+  UI -->|"ask(on_event)"| AG
   AG -->|"Bearer JWT"| G & V & A & X
   AG --> GATE --> V
   AG <--> MEM

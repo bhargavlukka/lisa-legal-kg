@@ -80,12 +80,13 @@ def summarize(tool: str, resp) -> dict:
     return {"headline": lab or ", ".join(list(p)[:6]), "items": []}
 
 
-def make_app():
+def make_app(agent=None):
+    """agent: a ResearchAgent (default) or any object with the same ask()/settings/agent attributes (tests)."""
     from starlette.applications import Starlette
     from starlette.responses import FileResponse, StreamingResponse
     from starlette.routing import Route
 
-    agent = ResearchAgent()
+    agent = agent or ResearchAgent()
     lock = asyncio.Lock()
     watchers: set[asyncio.Queue] = set()
 

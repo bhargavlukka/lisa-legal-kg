@@ -249,8 +249,9 @@ def _fast_settings(f: dict) -> dict:
     on = bool(f.get("enabled", False)) if env in (None, "") else env not in ("0", "false", "no")
     if not on:
         return {}
-    out = {"fast": True, "soft_deadline_s": float(f.get("soft_deadline_s", 35)),
-           "hard_deadline_s": float(f.get("hard_deadline_s", 58)), "wrapup_s": float(f.get("wrapup_s", 35))}
+    # cut-off well under 60 s: the final verify/salvage after it, and a slow gateway reply, still fit in a minute
+    out = {"fast": True, "soft_deadline_s": float(f.get("soft_deadline_s", 30)),
+           "hard_deadline_s": float(f.get("hard_deadline_s", 52)), "wrapup_s": float(f.get("wrapup_s", 30))}
     if "max_turns" in f:
         out["max_turns"] = int(f["max_turns"])
     return out

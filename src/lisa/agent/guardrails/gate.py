@@ -69,10 +69,12 @@ def salvage(draft: dict, report: dict) -> dict | None:
     """Keep only sentences fully backed by non-unverified citations; renumber markers. None if nothing survives."""
     ok = {i for i, r in enumerate(report["citations"], 1) if r["tier"] != UNVERIFIED}
     flagged = {p.get("sentence") for p in report["problems"] if p.get("sentence")}
+    # problems that name a quote or a bare case citation rather than a sentence: drop the sentence that carries it
+    bad_bits = [p[k][:60] for p in report["problems"] for k in ("quote", "cite") if p.get(k)]
     kept, used = [], []
     for s in sentences(draft["answer"]):
         nums = [int(n) for m in MARKER.finditer(s) for n in m.group(1).split(",")]
-        if not nums or not set(nums) <= ok or s[:300] in flagged:
+        if not nums or not set(nums) <= ok or s[:300] in flagged or any(b in s for b in bad_bits):
             continue
         for n in nums:
             if n not in used:

@@ -50,7 +50,7 @@ py -3 -m venv .venv
 .venv/Scripts/python -m pip install -e ".[dev,agent,rag]"     # Linux/macOS: .venv/bin/python
 cp .env.example .env     # set LISA_DATA_DIR, NEO4J_PASSWORD, SHAREDLLM_API_KEY, LISA_AUTH_SECRET (>= 32 random chars),
                          # COURTLISTENER_TOKEN (optional)
-.venv/Scripts/python -m pytest                                 # 282 tests, no network
+.venv/Scripts/python -m pytest                                 # 297 tests, no network
 ```
 
 ## Build the graph
@@ -71,6 +71,17 @@ Step by step: `scripts/build_graph.py --dataset all --check` (deterministic tier
 
 ## Run
 
+**Web UI (the way to demo it):** `scripts/demo.sh` starts Docker Desktop if needed, the compose stack and the web UI,
+then opens http://127.0.0.1:8200; `scripts/demo_stop.sh` stops everything. Without the script:
+`python scripts/web.py` (needs the four servers). Each question streams the agent's steps live (model calls with
+their duration, every tool call and its result, the verifier verdict, the gate decision); questions and answers stay
+in a conversation thread. Presenter runbook: [docs/demo.md](docs/demo.md).
+
+**Fast mode** is on by default (`agent.fast` in `config/settings.yaml`): answers in under a minute, same verifier
+gate; `LISA_AGENT_FAST=0` runs the full evaluated mode (minutes per answer). The model path caps the model's hidden
+reasoning through the local proxy (`agent.route: openai`; `LISA_AGENT_ROUTE=anthropic` reverts). Measurements:
+[evaluation report, section 5](docs/evaluation_report.md#5-fast-mode-answers-under-a-minute).
+
 Local processes (no Docker needed):
 
 ```bash
@@ -86,6 +97,7 @@ Full stack with Docker:
 docker compose --env-file .env up -d --build                                # neo4j, jaeger, 4 servers
 .venv/Scripts/python scripts/issue_token.py lisa-agent researcher           # put the output in .env as LISA_AGENT_TOKEN
 docker compose --env-file .env run --rm agent "Which immigration decisions cite Pereira v. Sessions?"
+docker compose --env-file .env --profile web up -d web                      # web UI in a container on :8200
 ```
 
 Each service gets only its own secrets; the agent gets `SHAREDLLM_API_KEY` and the pre-issued `LISA_AGENT_TOKEN`, not

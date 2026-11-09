@@ -5,7 +5,7 @@
 | use | endpoint | model | how it is called |
 |---|---|---|---|
 | RAG baseline, any new LLM-tier calls | `https://api.sharedllm.com/custom-openai/v1` (OpenAI-compatible) | `~z-ai/glm-flash-latest` | `src/lisa/llm/client.py`, temperature 0, JSON mode |
-| Research agent | `https://api.sharedllm.com/anthropic` (Anthropic-compatible, spec 4.3) | `~z-ai/glm-flash-latest` | Claude Agent SDK with `ANTHROPIC_BASE_URL`; the CLI sends the virtual key as bearer (`ANTHROPIC_AUTH_TOKEN`) plus `X-SharedLLM-Key` (`src/lisa/agent/agent.py`, `sdk_env`) |
+| Research agent | Claude Agent SDK -> local proxy -> `https://api.sharedllm.com/custom-openai/v1/chat/completions` with `reasoning: {max_tokens: 200}` (`agent.route: openai`, default); or directly `https://api.sharedllm.com/anthropic` (`LISA_AGENT_ROUTE=anthropic`, the route of the original evaluation) | `~z-ai/glm-flash-latest` | Claude Agent SDK with `ANTHROPIC_BASE_URL` = the local proxy (spec 4.3), which translates Anthropic Messages to chat.completions and back; virtual key only (`src/lisa/agent/usage_proxy.py`, `sdk_env`) |
 | Extraction tier + enrichment, extraction evaluation (history: already run, cached) | `https://api.sharedllm.com/ollama/v1` (BYOK) | `gpt-oss:120b` | same client; results in `docs/eval/extraction_report.md` |
 
 The model path is the spec's standard path exactly: the SharedLLM gateway, authenticated **only** with the virtual
@@ -16,6 +16,17 @@ dashboard Playground exports); without the `~` the gateway routed to the account
 upstream rejected (401), which is why the extraction tier earlier ran in bring-your-own-key mode on `gpt-oss:120b`
 (decision log). Model identity lives only in `config/settings.yaml` (`llm.model`, `agent.model`); switching model or
 endpoint is a config change, and the LLM cache key includes the model, so results from different models never mix.
+
+## Latency: why answers took minutes, and the fix
+
+Tools and the verifier answer in milliseconds; the time is the model's hidden reasoning, which is unbounded on the
+gateway's Anthropic route (single calls 30-85 s, one plain prompt reasoned 74 s with no output, `reasoning` /
+`effort` caps ignored: 31-150 s). The OpenAI-compatible route honours `reasoning.max_tokens` (200 -> 4-6 s per call).
+The agent therefore reaches the gateway through the local proxy in translation mode, and fast mode (`agent.fast`)
+bounds the turn: the code gate verifies (no model self-verification), a wrap-up interrupt at 30 s, no model revision
+after 30 s, a hard cut-off at 52 s. Result on the golden set: every answer under a minute (evaluation report section 5).
+If the gateway is slow (observed: ~35 output tokens/s at busy times instead of ~200), the deadlines still hold;
+the answer is then shorter or salvaged, never unverified.
 
 ## Limits we engineer against
 
