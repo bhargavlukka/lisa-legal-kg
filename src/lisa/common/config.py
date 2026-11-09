@@ -213,14 +213,44 @@ class AgentSettings:
     max_revisions: int
     sessions_dir: str
     usage_proxy: bool = True
+    fast: bool = False                 # fast mode: harness-only verification, concise answers, deadlines
+    soft_deadline_s: float = 0         # no model revision starts after this (0 = off); code salvage instead
+    hard_deadline_s: float = 0         # the turn is cut off here (0 = off); salvage the last draft or refuse
+    wrapup_s: float = 0                # still researching here (0 = off): interrupt, ask for the final JSON now
+    openai_url: str | None = None      # route=openai: the proxy translates /v1/messages to this chat.completions URL
+    reasoning: dict | None = None      # injected on the OpenAI route, e.g. {"max_tokens": 400} (bounds hidden reasoning)
 
 
 def load_agent_settings(config_dir: Path = CONFIG_DIR, env_file: Path | None = REPO_ROOT / ".env") -> AgentSettings:
     llm = load_llm_settings(config_dir, env_file)
     s = _yaml(config_dir / "settings.yaml").get("agent") or {}
-    return AgentSettings(base_url=s.get("base_url", "https://api.sharedllm.com/ollama"),
-                         model=os.environ.get("LISA_AGENT_MODEL") or s.get("model", llm.model),
-                         gateway_key=llm.api_key, provider_key=llm.provider_key,
-                         max_turns=int(s.get("max_turns", 30)), max_revisions=int(s.get("max_revisions", 2)),
-                         sessions_dir=s.get("sessions_dir", "sessions"),
-                         usage_proxy=bool(s.get("usage_proxy", True)))
+    kw = dict(base_url=s.get("base_url", "https://api.sharedllm.com/ollama"),
+              model=os.environ.get("LISA_AGENT_MODEL") or s.get("model", llm.model),
+              gateway_key=llm.api_key, provider_key=llm.provider_key,
+              max_turns=int(s.get("max_turns", 30)), max_revisions=int(s.get("max_revisions", 2)),
+              sessions_dir=s.get("sessions_dir", "sessions"), usage_proxy=bool(s.get("usage_proxy", True)))
+    return AgentSettings(**(kw | _fast_settings(s.get("fast") or {}) | _route_settings(s)))
+
+
+def _route_settings(s: dict) -> dict:
+    """agent.route: `openai` sends model calls via the proxy's chat.completions translation, where the reasoning cap is
+    honoured (the Anthropic route ignores it). LISA_AGENT_ROUTE overrides; needs usage_proxy."""
+    route = os.environ.get("LISA_AGENT_ROUTE") or s.get("route", "anthropic")
+    if route != "openai":
+        return {}
+    r = s.get("reasoning")
+    return {"openai_url": s.get("openai_url", "https://api.sharedllm.com/custom-openai/v1/chat/completions"),
+            "reasoning": dict(r) if r else None}
+
+
+def _fast_settings(f: dict) -> dict:
+    """agent.fast in settings.yaml; LISA_AGENT_FAST=0/1 overrides `enabled` (e.g. to compare against full mode)."""
+    env = os.environ.get("LISA_AGENT_FAST")
+    on = bool(f.get("enabled", False)) if env in (None, "") else env not in ("0", "false", "no")
+    if not on:
+        return {}
+    out = {"fast": True, "soft_deadline_s": float(f.get("soft_deadline_s", 35)),
+           "hard_deadline_s": float(f.get("hard_deadline_s", 58)), "wrapup_s": float(f.get("wrapup_s", 35))}
+    if "max_turns" in f:
+        out["max_turns"] = int(f["max_turns"])
+    return out

@@ -103,3 +103,109 @@ def test_message_start_carries_final_usage_and_revision_passes_are_summed():
     t.passes = [(100, 30), (200, 50)]                            # first draft + one revision
     t.tally()
     assert (t.input_tokens, t.output_tokens) == (300, 80)
+
+
+# ---- OpenAI-route translation (route: openai) ----
+from lisa.agent.usage_proxy import from_openai, to_openai  # noqa: E402
+
+TOOLS = [{"name": "get_case", "description": "Fetch a case", "input_schema": {
+    "type": "object", "properties": {"case_id": {"type": "string"}}, "required": ["case_id"]}},
+    {"type": "web_search_20250305", "name": "web_search"}]
+
+
+def test_to_openai_maps_system_history_tools_and_injects_reasoning_cap():
+    req = {"model": "m", "max_tokens": 1024, "stream": False, "temperature": 0,
+           "system": [{"type": "text", "text": "You are LISA."}, {"type": "text", "text": "Cite.", "cache_control": {}}],
+           "tools": TOOLS, "tool_choice": {"type": "any", "disable_parallel_tool_use": True},
+           "messages": [{"role": "user", "content": "Who cites Pereira?"},
+                        {"role": "assistant", "content": [
+                            {"type": "thinking", "thinking": "hmm", "signature": "s"},
+                            {"type": "text", "text": "Looking."},
+                            {"type": "tool_use", "id": "call_a", "name": "get_case", "input": {"case_id": "x"}},
+                            {"type": "tool_use", "id": "call_b", "name": "get_case", "input": {"case_id": "y"}}]},
+                        {"role": "user", "content": [
+                            {"type": "tool_result", "tool_use_id": "call_a", "content": "found x"},
+                            {"type": "tool_result", "tool_use_id": "call_b", "is_error": True,
+                             "content": [{"type": "text", "text": "no such case"}]},
+                            {"type": "text", "text": "Continue."}]}]}
+    o = to_openai(req, {"max_tokens": 200})
+    assert o["reasoning"] == {"max_tokens": 200} and o["max_tokens"] == 8192 and o["temperature"] == 0
+    assert "stream" not in o and o["tool_choice"] == "required" and o["parallel_tool_calls"] is False
+    assert o["tools"] == [{"type": "function", "function": {"name": "get_case", "description": "Fetch a case",
+                                                            "parameters": TOOLS[0]["input_schema"]}}]
+    m = o["messages"]
+    assert m[0] == {"role": "system", "content": "You are LISA.\nCite."}
+    assert m[1] == {"role": "user", "content": "Who cites Pereira?"}
+    assert m[2]["role"] == "assistant" and m[2]["content"] == "Looking."           # thinking dropped
+    assert [(c["id"], c["function"]["name"], json.loads(c["function"]["arguments"])) for c in m[2]["tool_calls"]] == \
+        [("call_a", "get_case", {"case_id": "x"}), ("call_b", "get_case", {"case_id": "y"})]
+    assert m[3] == {"role": "tool", "tool_call_id": "call_a", "content": "found x"}
+    assert m[4] == {"role": "tool", "tool_call_id": "call_b", "content": "[tool error] no such case"}
+    assert m[5] == {"role": "user", "content": "Continue."} and len(m) == 6
+    big = to_openai({"model": "m", "max_tokens": 20000, "system": "s", "messages": [],
+                     "tools": TOOLS, "tool_choice": {"type": "tool", "name": "get_case"}})
+    assert big["max_tokens"] == 20000 and big["messages"] == [{"role": "system", "content": "s"}]
+    assert big["tool_choice"] == {"type": "function", "function": {"name": "get_case"}} and "reasoning" not in big
+
+
+def test_from_openai_maps_parallel_tool_calls_stop_reasons_and_usage():
+    resp = {"id": "chatcmpl-1", "model": "z", "usage": {"prompt_tokens": 900, "completion_tokens": 60},
+            "choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": None,
+                         "reasoning": "hidden", "tool_calls": [
+                             {"id": "call_1", "type": "function", "function": {"name": "a", "arguments": '{"q": 1}'}},
+                             {"id": "call_2", "type": "function", "function": {"name": "b", "arguments": "{bad"}}]}}]}
+    msg = from_openai(resp, "m")
+    assert msg["id"] == "msg_chatcmpl-1" and msg["model"] == "m" and msg["stop_reason"] == "tool_use"
+    assert msg["content"] == [{"type": "tool_use", "id": "call_1", "name": "a", "input": {"q": 1}},
+                              {"type": "tool_use", "id": "call_2", "name": "b", "input": {}}]
+    assert msg["usage"] == {"input_tokens": 900, "output_tokens": 60}
+    assert rebuild(parse(sse_events(msg))) == msg                       # replays as SSE like a native reply
+
+    def one(fin, content="hi"):
+        return from_openai({"choices": [{"finish_reason": fin, "message": {"content": content}}]}, "m")
+    assert one("stop")["stop_reason"] == "end_turn" and one("stop")["content"] == [{"type": "text", "text": "hi"}]
+    assert one("length")["stop_reason"] == "max_tokens" and one("stop", None)["content"] == [{"type": "text", "text": ""}]
+
+
+def test_proxy_openai_route_round_trip_meters_and_wraps_errors(tmp_path):
+    seen = []
+
+    def upstream(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        seen.append((str(req.url), body, dict(req.headers)))
+        if body["messages"][-1]["content"] == "busy":
+            return httpx.Response(429, text="rate limited", headers={"retry-after": "3"})
+        if body["messages"][-1]["role"] == "tool":
+            return httpx.Response(200, json={"id": "c2", "usage": {"prompt_tokens": 50, "completion_tokens": 5},
+                                             "choices": [{"finish_reason": "stop", "message": {"content": "Done."}}]})
+        return httpx.Response(200, json={"id": "c1", "usage": {"prompt_tokens": 40, "completion_tokens": 9},
+                                         "choices": [{"finish_reason": "tool_calls", "message": {"tool_calls": [
+                                             {"id": "call_9", "function": {"name": "get_case",
+                                                                           "arguments": '{"case_id": "e1"}'}}]}}]})
+
+    ledger = tmp_path / "usage.jsonl"
+    app = make_app("https://gw.example/anthropic", ledger, transport=httpx.MockTransport(upstream),
+                   openai_url="https://gw.example/custom-openai/v1/chat/completions", reasoning={"max_tokens": 200})
+    hdr = {"X-SharedLLM-Key": "k", "Authorization": "Bearer pk", "anthropic-version": "2023-06-01"}
+    with TestClient(app) as c:
+        q = {"model": "m", "max_tokens": 32000, "stream": True, "tools": TOOLS[:1],
+             "messages": [{"role": "user", "content": "q"}]}
+        first = rebuild(parse(c.post("/v1/messages", json=q, headers=hdr).content.split(b"\n\n")[:-1]))
+        assert first["stop_reason"] == "tool_use" and first["usage"] == {"input_tokens": 40, "output_tokens": 9}
+        tu = first["content"][0]
+        assert (tu["id"], tu["name"], tu["input"]) == ("call_9", "get_case", {"case_id": "e1"})
+        q["messages"] += [{"role": "assistant", "content": first["content"]}, {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "call_9", "content": [{"type": "text", "text": "case e1"}]}]}]
+        second = c.post("/v1/messages", json={**q, "stream": False}, headers=hdr).json()
+        assert second["content"] == [{"type": "text", "text": "Done."}] and second["stop_reason"] == "end_turn"
+        busy = c.post("/v1/messages", json={**q, "messages": [{"role": "user", "content": "busy"}]}, headers=hdr)
+        assert busy.status_code == 429 and busy.headers["retry-after"] == "3"
+        assert busy.json()["type"] == "error" and "rate limited" in busy.json()["error"]["message"]
+    url, body, h = seen[0]
+    assert url == "https://gw.example/custom-openai/v1/chat/completions"
+    assert body["reasoning"] == {"max_tokens": 200} and body["max_tokens"] == 32000 and body["model"] == "m"
+    assert h["x-sharedllm-key"] == "k" and "authorization" not in h and h["accept-encoding"] == "identity"
+    assert seen[1][1]["messages"][1]["tool_calls"][0]["id"] == "call_9"
+    assert seen[1][1]["messages"][2] == {"role": "tool", "tool_call_id": "call_9", "content": "case e1"}
+    rows = [json.loads(line) for line in ledger.read_text().splitlines()]
+    assert [(x["input_tokens"], x["output_tokens"]) for x in rows] == [(40, 9), (50, 5)]   # errors not metered

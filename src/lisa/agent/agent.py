@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import dataclasses
 import os
+
+import anyio
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from lisa.agent.guardrails import gate
 from lisa.agent.mcp_http import MCPCallError, call_tool
@@ -53,6 +56,15 @@ Finish with exactly one fenced JSON block and nothing after it:
 {"answer": "<prose with [1], [2] markers>",
  "citations": [{"case": "<case_id | case name | reporter citation>", "quote": "<verbatim, corpus cases>", "page": <int>}]}
 ```"""
+
+FAST_RULES = """
+
+Fast mode - the researcher needs the answer within a minute:
+- At most 4 rounds of tool calls. Put independent tool calls in the same step (they run in parallel).
+- Quote from the "evidence" quotes the graph tools already return; call read_page only when a case has none.
+- Do NOT call verifier.verify_answer: the system verifies your final JSON automatically and tells you what to fix.
+- Keep it short: one or two sentences per case, under 220 words in total, one citation per case, quotes of
+  12-30 words copied exactly."""
 
 
 @dataclass
@@ -115,7 +127,8 @@ class ResearchAgent:
         setup_tracing("lisa-agent", self.settings.out_dir)
         if self.agent.usage_proxy:                       # exact per-call token usage (see usage_proxy.py)
             from lisa.agent import usage_proxy
-            url = usage_proxy.start(self.agent.base_url, self.settings.out_dir / "llm_usage.jsonl")
+            url = usage_proxy.start(self.agent.base_url, self.settings.out_dir / "llm_usage.jsonl",
+                                    openai_url=self.agent.openai_url, reasoning=self.agent.reasoning)
             self.agent = dataclasses.replace(self.agent, base_url=url)
         self.token = os.environ.get("LISA_AGENT_TOKEN") or issue_token(self.auth, subject, role)
         host = os.environ.get("LISA_MCP_HOST") or self.serve.host
@@ -126,7 +139,7 @@ class ResearchAgent:
     def _env(self) -> dict:
         return sdk_env(self.agent)
 
-    def _options(self, traj: Trajectory, resume: str | None):
+    def _options(self, traj: Trajectory, resume: str | None, emit: Callable[[dict], None] = lambda e: None):
         from claude_agent_sdk import ClaudeAgentOptions, HookMatcher
 
         async def pre(inp, tool_use_id, ctx):
@@ -134,8 +147,13 @@ class ResearchAgent:
             if name not in MCP_TOOLS and name not in META_TOOLS:
                 return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                                "permissionDecisionReason": f"{name} is not available to LISA"}}
+            if self.agent.fast and name == "mcp__verifier__verify_answer":    # the harness gate verifies every draft
+                return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                               "permissionDecisionReason": "Fast mode: the system verifies your final "
+                                               "JSON automatically - output it now."}}
             traj.tools.append({"name": name, "input": inp.get("tool_input"), "t": time.time(),
                                "agent": inp.get("agent_id")})
+            emit({"type": "tool_start", "tool": name, "input": inp.get("tool_input"), "subagent": inp.get("agent_id")})
             return {}
 
         async def post(inp, tool_use_id, ctx):
@@ -143,6 +161,7 @@ class ResearchAgent:
             for t in reversed(traj.tools):
                 if t["name"] == name and "ms" not in t:
                     t["ms"] = round((time.time() - t["t"]) * 1000)
+                    emit({"type": "tool_end", "tool": name, "ms": t["ms"], "result": inp.get("tool_response")})
                     break
             with span(f"agent.tool.{name}", **{"tool.name": name, "tool.input": inp.get("tool_input")}):
                 pass
@@ -151,7 +170,7 @@ class ResearchAgent:
         servers = {s: {"type": "http", "url": u, "headers": {"Authorization": f"Bearer {self.token}"}}
                    for s, u in self.urls.items()}
         return ClaudeAgentOptions(
-            system_prompt=SYSTEM_PROMPT, model=self.agent.model, env=self._env(), cwd=str(AGENT_DIR),
+            system_prompt=SYSTEM_PROMPT + (FAST_RULES if self.agent.fast else ""), model=self.agent.model, env=self._env(), cwd=str(AGENT_DIR),
             mcp_servers=servers, strict_mcp_config=True, tools=META_TOOLS, allowed_tools=MCP_TOOLS + META_TOOLS,
             skills=["legal-research"], agents={"citation-chaser": citation_chaser()},
             setting_sources=["project"], max_turns=self.agent.max_turns, resume=resume,
@@ -185,8 +204,17 @@ class ResearchAgent:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     # ---------- one research turn ----------
-    async def ask(self, question: str, memory: SessionMemory | None = None) -> TurnResult:
+    async def ask(self, question: str, memory: SessionMemory | None = None,
+                  on_event: Callable[[dict], None] | None = None) -> TurnResult:
+        """on_event receives progress dicts (tool_start/tool_end/note/verify/revision/...) for live display."""
         from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock
+
+        def emit(e: dict) -> None:
+            if on_event:
+                try:
+                    on_event({"t": round(time.time() - t0, 1), **e})
+                except Exception:                                    # a display bug must never break a turn
+                    pass
 
         t0 = time.time()
         traj = Trajectory()
@@ -194,6 +222,8 @@ class ResearchAgent:
         prompt = (digest + "\n\nNew question: " if digest else "") + question
         resume = memory.sdk_session_id if memory else None
         sdk_id, revisions, gate_calls = None, 0, 0
+        draft, report = None, {}
+        soft, hard = self.agent.soft_deadline_s, self.agent.hard_deadline_s
 
         async def run(client, text: str) -> str:
             nonlocal sdk_id
@@ -213,6 +243,8 @@ class ResearchAgent:
                     if m.parent_tool_use_id is None:
                         txt = "".join(b.text for b in m.content if isinstance(b, TextBlock))
                         last = txt or last
+                        if txt.strip() and "```json" not in txt:
+                            emit({"type": "note", "text": txt.strip()[:600]})
                 elif isinstance(m, ResultMessage):
                     sdk_id = m.session_id
                     final = m.result or last
@@ -221,27 +253,59 @@ class ResearchAgent:
                     traj.tally()
             return final or last
 
-        with span("agent.ask", question=question, session=memory.name if memory else None) as sp:
+        async def session() -> None:
+            nonlocal draft, report, revisions, gate_calls
+            client = ClaudeSDKClient(self._options(traj, resume, emit))
             try:
-                client = ClaudeSDKClient(self._options(traj, resume))
-                try:
-                    await client.connect()
-                except Exception:
-                    if not resume:
-                        raise
-                    client = ClaudeSDKClient(self._options(traj, None))     # transcript gone: digest still applies
-                    await client.connect()
-                try:
-                    draft = gate.parse_final(await run(client, prompt))
+                await client.connect()
+            except Exception:
+                if not resume:
+                    raise
+                client = ClaudeSDKClient(self._options(traj, None, emit))     # transcript gone: digest still applies
+                await client.connect()
+            try:
+                final = None
+                with anyio.move_on_after(self.agent.wrapup_s or None) as wrap:
+                    final = await run(client, prompt)
+                if wrap.cancelled_caught:                # still researching: stop and answer from what was found
+                    emit({"type": "wrapup", "after_s": self.agent.wrapup_s})
+                    await client.interrupt()
+                    with anyio.move_on_after(5):
+                        async for _ in client.receive_response():
+                            pass
+                    final = await run(client, gate.WRAPUP_PROMPT)
+                draft = gate.parse_final(final)
+                emit({"type": "draft", "citations": len(draft["citations"])})
+                report = self.verify(draft)
+                gate_calls += 1
+                emit({"type": "verify", "passed": bool(report.get("passed")), "problems": report.get("problems", [])[:8]})
+                # fast mode: no model revision past the soft deadline - salvage below does it in code
+                while (not report.get("passed") and revisions < self.agent.max_revisions
+                       and not (soft and time.time() - t0 > soft)):
+                    revisions += 1
+                    emit({"type": "revision", "n": revisions})
+                    draft = gate.parse_final(await run(client, gate.revision_prompt(report)))
                     report = self.verify(draft)
                     gate_calls += 1
-                    while not report.get("passed") and revisions < self.agent.max_revisions:
-                        revisions += 1
-                        draft = gate.parse_final(await run(client, gate.revision_prompt(report)))
+                    emit({"type": "verify", "passed": bool(report.get("passed")),
+                          "problems": report.get("problems", [])[:8]})
+            finally:
+                with anyio.CancelScope(shield=True):
+                    await client.disconnect()
+
+        emit({"type": "start", "question": question})
+        with span("agent.ask", question=question, session=memory.name if memory else None) as sp:
+            try:
+                with anyio.move_on_after(hard or None) as deadline:
+                    await session()
+                if deadline.cancelled_caught:                            # hard cut-off: verify what we have
+                    emit({"type": "timeout", "after_s": hard})
+                    sp.set_attribute("agent.timeout", True)
+                    if draft is None:
+                        raise TimeoutError(f"no answer within {hard:.0f}s")
+                    if not report:
                         report = self.verify(draft)
                         gate_calls += 1
-                finally:
-                    await client.disconnect()
             except Exception as e:                                       # model path down: fail closed
                 sp.set_attribute("agent.error", f"{type(e).__name__}: {e}")
                 text = gate.REFUSAL + f"\n\n(Agent error: {type(e).__name__}: {str(e)[:200]})"
@@ -260,6 +324,7 @@ class ResearchAgent:
                 else:
                     status = "refused"
                     text = gate.REFUSAL + ("\n\n" + gate.DISCLAIMER if gate.is_advice(question) else "")
+            emit({"type": "gate", "status": status})
             sp.set_attribute("agent.status", status)
             sp.set_attribute("agent.revisions", revisions)
 
