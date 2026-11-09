@@ -288,3 +288,35 @@ The first KG run's input total is a lower bound: the gateway reports `input_toke
 Anthropic-compatible route (non-zero only for q15, q19, q20, q22, q24). The metering proxy fixes this for all later
 agent runs ([model_constraints.md](model_constraints.md)). The RAG baseline uses the OpenAI-compatible route,
 which reports both.
+
+## 5. Fast mode: answers under a minute
+
+**Why.** After the first review the requirement became answers in under one minute (section 2: KG agent mean 344 s,
+median 284 s). Measured cause: the model's hidden reasoning, unbounded on the gateway's Anthropic route (single
+calls 30-85 s); tools and the verifier take milliseconds. Fix (decision log, 2026-11-09): the local proxy routes the
+agent's calls to the gateway's OpenAI-compatible route with `reasoning: {max_tokens: 200}`, and fast mode bounds the
+turn (code-only verification, wrap-up at 30 s, no model revision after 30 s, hard cut-off at 52 s).
+
+**Run.** The same golden questions (q01-q29; q30 needs scripted setup turns) through the web UI, one at a time, same
+model (`~z-ai/glm-flash-latest`), same verifier, scored with `src/lisa/eval/qa.py`.
+
+| metric | KG agent, full mode (section 2, metered) | KG agent, fast mode |
+|---|---|---|
+| n | 30 | 29 |
+| latency median / mean / max, s | 283.7 / 343.7 / 1183.7 | **30.1 / 28.6 / 57.0** |
+| answers over 60 s | 30 of 30 (fastest 83 s) | **0 of 29** |
+| recall | 0.962 | 0.845 |
+| precision | 0.639 | 0.767 |
+| behaviour_ok | 0.967 | 0.862 |
+| answered (verified + salvaged) | 30 | 26 (20 verified, 6 salvaged) |
+| refused / error | 0 | 2 / 1 |
+| unqualified status claims | 0 | 0 |
+
+**Reading.** Every answer arrived in under a minute, about 10x faster at the median, with higher precision and the
+same integrity guarantees: nothing reaches the user without passing the verifier, and no answer asserts legal
+status. The cost is completeness: recall 0.85 against 0.96, and 3 of 29 questions not answered (q13: no draft before
+the cut-off; q16, q21: no draft sentence survived verification). Misses concentrate in statute questions (q17 0.57)
+and two lists (q08, q15). Earlier fast-mode iterations show the levers: citing each listed case with the graph's own
+evidence quote took citing-list recall from 0.2-0.33 to 1.0 (q02, q04), and multi-pass salvage turned refusals into
+trimmed answers. The full mode stays available for depth (`LISA_AGENT_FAST=0`); fast mode is the interactive default.
+Latency varies with gateway load (observed ~35 to ~200 output tokens/s); the deadlines hold regardless.

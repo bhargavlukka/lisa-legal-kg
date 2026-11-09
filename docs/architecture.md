@@ -15,6 +15,7 @@ flowchart LR
   GJ --> G["graph-server :8101"] & V["citation-verifier :8102"] & A["analytics-server :8103"]
   X["external-law-server :8104"] <--> CL["CourtListener v4"]
   V --> CL
+  UI["web UI :8200<br/>live steps over SSE"] --> AG
   AG["agent (Claude Agent SDK)<br/>skill + subagent + memory"] -->|JWT| G & V & A & X
   AG --> GATE["code gate<br/>verify -> revise -> salvage -> refuse"] --> V
   AG <--> LLM["SharedLLM gateway<br/>~z-ai/glm-flash-latest"]
@@ -95,6 +96,14 @@ still fails, sentences backed only by verified citations are salvaged and re-ver
 The delivered text is rendered by code: sources with their verifier tier, a fixed "legal status not verified"
 notice, and the advice disclaimer when the question asks for advice. Each turn is appended to
 `out/trajectories.jsonl`.
+
+**Fast mode and the live view.** With `agent.fast` (default) the model path goes through the local proxy in
+translation mode to the gateway's OpenAI-compatible route, which honours a reasoning cap (`agent.route: openai`);
+the code gate verifies every draft and the model's own `verify_answer` call is denied; at 30 s an agent still
+researching is interrupted for its final JSON, no model revision starts after 30 s (salvage instead), and the turn
+is cut at 52 s. `ask(on_event=...)` emits progress events from the hooks and the proxy; `src/lisa/web/app.py`
+(`scripts/web.py`, :8200) streams them over server-sent events to a single static page (`src/lisa/web/static/`): a
+conversation thread where each answer keeps its steps, timing and verifier-tagged sources.
 
 ## L4 - evaluation (`src/lisa/eval`, `config/eval`)
 

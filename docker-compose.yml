@@ -1,6 +1,7 @@
 # Full LISA stack: Neo4j, Jaeger (traces), the four MCP servers, and the research agent.
 #   docker compose --env-file .env up -d --build             # neo4j, jaeger, 4 servers
 #   docker compose --env-file .env run --rm agent "Which immigration decisions cite Pereira v. Sessions?"
+#   docker compose --env-file .env --profile web up -d web    # web UI with the live agent view: http://127.0.0.1:8200
 # Build the graphs first on the host (they are mounted from ./out): scripts/rebuild.sh or scripts/rebuild.ps1.
 # Secrets come from .env (never committed). LISA_GRAPH_BACKEND=neo4j serves from Neo4j instead of the JSON graphs
 # (load it with scripts/load_neo4j.py).
@@ -101,6 +102,35 @@ services:
     volumes:
       - "${LISA_DATA_DIR:?set LISA_DATA_DIR in .env}:/data:ro"
       - ./out:/app/out
+    depends_on: [graph, verifier, analytics, external]
+
+  web:
+    image: lisa-agent              # same image as the agent: Agent SDK + claude CLI
+    build:
+      context: .
+      target: agent
+      args: {CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.289}"}
+    user: "${LISA_UID:-10001}:${LISA_GID:-10001}"
+    profiles: [web]                # opt-in: scripts/demo.sh runs the UI on the host instead (same port)
+    restart: unless-stopped
+    entrypoint: ["python", "scripts/web.py", "--host", "0.0.0.0", "--port", "8200"]
+    # Same secrets as the agent: the SharedLLM key and a pre-issued researcher token (expires after auth.token_ttl_s;
+    # re-issue with scripts/issue_token.py and restart the service).
+    environment:
+      SHAREDLLM_API_KEY: ${SHAREDLLM_API_KEY:?set SHAREDLLM_API_KEY in .env}
+      HOME: /tmp
+      LISA_AGENT_TOKEN: ${LISA_AGENT_TOKEN:?set LISA_AGENT_TOKEN in .env (python scripts/issue_token.py lisa-agent)}
+      LISA_DATA_DIR: /data
+      LISA_OUT_DIR: /app/out
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      LISA_GRAPH_URL: http://graph:8101/mcp
+      LISA_VERIFIER_URL: http://verifier:8102/mcp
+      LISA_ANALYTICS_URL: http://analytics:8103/mcp
+      LISA_EXTERNAL_URL: http://external:8104/mcp
+    volumes:
+      - "${LISA_DATA_DIR:?set LISA_DATA_DIR in .env}:/data:ro"
+      - ./out:/app/out
+    ports: ["127.0.0.1:8200:8200"]
     depends_on: [graph, verifier, analytics, external]
 
 volumes:

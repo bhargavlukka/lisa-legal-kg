@@ -63,8 +63,13 @@ Fast mode - the researcher needs the answer within a minute:
 - At most 4 rounds of tool calls. Put independent tool calls in the same step (they run in parallel).
 - Quote from the "evidence" quotes the graph tools already return; call read_page only when a case has none.
 - Do NOT call verifier.verify_answer: the system verifies your final JSON automatically and tells you what to fix.
-- Keep it short: one or two sentences per case, under 220 words in total, one citation per case, quotes of
-  12-30 words copied exactly."""
+- Keep it short: one or two sentences per case, under 220 words in total, quotes of 12-30 words copied exactly.
+- When you list cases (e.g. the decisions that cite X), cite EACH listed case as its own source with its own [n]:
+  case = the listed case, quote = the evidence quote the graph tool returned for it, page = that quote's page.
+- Citations are cases only (case_id, case name or reporter citation) - never a statute or regulation; support a
+  statute statement with a case that discusses it.
+- Every [n] in the answer needs a matching citations entry. Put quotation marks only around text copied exactly
+  from a tool result; paraphrase without quotation marks."""
 
 
 @dataclass
@@ -315,9 +320,16 @@ class ResearchAgent:
             if report.get("passed"):
                 status, text = "verified", gate.render(question, draft["answer"], report, "verified")
             else:
-                kept = gate.salvage(draft, report) if report.get("citations") else None
-                rep2 = self.verify(kept) if kept else None
-                gate_calls += 1 if kept else 0
+                # trimming can leave a new problem (e.g. a now-unsupported quote): trim again, a few passes at most
+                kept, rep2 = draft, report
+                for _ in range(3):
+                    kept = gate.salvage(kept, rep2) if rep2.get("citations") else None
+                    if not kept:
+                        break
+                    rep2 = self.verify(kept)
+                    gate_calls += 1
+                    if rep2.get("passed"):
+                        break
                 if kept and rep2.get("passed"):
                     status, draft, report = "salvaged", kept, rep2
                     text = gate.render(question, kept["answer"], rep2, "partial - unsupported claims were removed")

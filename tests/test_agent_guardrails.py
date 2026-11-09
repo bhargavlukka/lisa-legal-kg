@@ -29,6 +29,17 @@ def test_salvage_keeps_only_fully_supported_sentences_and_renumbers():
     assert out == {"answer": "The Court held B [1].", "citations": [{"case": "b"}]}
 
 
+def test_salvage_drops_sentences_carrying_a_flagged_quote_or_bare_citation():
+    draft = {"answer": 'The Board said "a notice lacking time and place is fine" [1]. The Court held B [2]. '
+                       "See also 585 U.S. 198, decided C [2]. The Board held D [1].",
+             "citations": [{"case": "a"}, {"case": "b"}]}
+    out = gate.salvage(draft, rep(VERIFIED, VERIFIED, problems=[
+        {"kind": "unverified_quote", "quote": "a notice lacking time and place is fine"},
+        {"kind": "uncited_case_reference", "cite": "585 U.S. 198"}]))
+    assert out == {"answer": "The Court held B [1]. The Board held D [2].",
+                   "citations": [{"case": "b"}, {"case": "a"}]}
+
+
 def test_salvage_returns_none_when_nothing_survives():
     draft = {"answer": "The Board held A [1].", "citations": [{"case": "a"}]}
     assert gate.salvage(draft, rep(UNVERIFIED, problems=[{"kind": "unverified_citation"}])) is None
